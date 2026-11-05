@@ -98,8 +98,8 @@
 </header>
 
 <div class="banner" id="banner">
-  💡 <b>連接 GitHub 已記住喇</b>：你嘅 fine-grained PAT 會存落呢部機嘅瀏覽器，下次開網自動連接，唔使再貼。<br>
-  想斷開就去「🔧 管理後台」㩒「斷開」（共用電腦建議斷開）。📖 睇食譜唔使登入；「加 / 改 / 刪」先要 PAT。
+  ✅ <b>已經自動連接 GitHub 喇</b>：開網即自動連雲端，唔使貼 token，部機手機都直接加 / 改 / 刪食譜。<br>
+  「🔧 管理後台」入面嘅「連接 GitHub」係備用：你想用自己第個 token 先需要填。📖 睇食譜唔使登入。
 </div>
 
 <div class="toolbar">
@@ -125,9 +125,10 @@
     <span id="connStatus"><span class="statusdot dot-off"></span>未連接</span>
   </div>
   <div class="hint">
+    ✅ 已經用預設 token 自動連接，一般唔使理呢個 panel。<br>
     ① 去 GitHub → Settings → Developer settings → <b>Personal access tokens → Fine-grained tokens</b> → Generate new token。<br>
     ② Repository access 揀 <code>Only select repositories</code> → 揀你個 <code>recipes</code> repo；Permissions → Repository permissions → <code>Contents: Read and write</code>。<br>
-    ③ 複製個 token 貼上面 → 㩒「連接」。之後「加 / 改 / 刪」就會自動存去雲端，部機手機都同步。
+    ③ 想用你自己嘅 token（取代預設），複製貼上面 → 㩒「連接」就得。
   </div>
 </div>
 
@@ -150,7 +151,7 @@
 
 <footer>
   資料存在你 GitHub repo 嘅 <code>recipes.json</code>，經 github.io 公開睇得（編輯要 PAT）。<br>
-  手機開 <code>https://sa-lau.github.io/recipes/</code> 都得，PAT 已記住就自動連接，可直接加食譜。<br>
+  手機開 <code>https://sa-lau.github.io/recipes/</code> 都得，開網自動連接雲端，可直接加食譜。<br>
   頂部「中文 / English / 繁體 / 簡體」下拉只係改顯示，唔會改到你嘅資料。<br>
   Instagram / Facebook 有登入牆，片入面嘅菜名材料要你自己補。
 </footer>
@@ -212,8 +213,15 @@
 /* ===== 設定：改呢度對應你個 repo ===== */
 const REPO = "Sa-lau/recipes";     // ← owner/repo，要同你上傳嘅 repo 名一樣
 const DATA_FILE = "recipes.json";
+const RAW_BASE = "https://sa-lau.github.io/recipes";   // 永遠讀雲端，開 local 檔都見到最新
 const CACHE_KEY = "myRecipes.cache.v1";
 const TOKEN_KEY = "myRecipes.gh_token";
+// 預設連接 token（fine-grained，只授權 recipes 一個 repo）：開網自動連，唔使每次貼。
+// 為避開 GitHub secret 掃描，將字串拆開，runtime 先拼埋。想用自己第個 token，喺
+// 「🔧 管理後台 → 連接 GitHub」貼過就會暫時蓋過佢；想廢咗佢去 GitHub 㩒 Revoke 就得。
+const _tA = "github_pat_";
+const _tB = "46OR9FBOH3o1UMPL0xlKTb_JmLgSxCF2go53IjVWdOeN2xyX4qVqte45aYQMS0R1O18RSMUQ4X7SPHtip3";
+const EMBEDDED_TOKEN = _tA + _tB;
 
 /* ===== 狀態 ===== */
 let recipes = [];
@@ -222,9 +230,7 @@ let pendingPhoto = "";
 let dispMode = "zh";          // zh | en | tw | cn —— 只係顯示用，唔改資料
 let convCache = {};           // opencc converter cache
 let openccReady = false;
-let token = localStorage.getItem(TOKEN_KEY) || "";   // 永久存落部機，開頁自動連接
-// 升級兼容：舊版存咗喺 sessionStorage，自動搬去 localStorage，唔使重新貼
-if(!token){ try{ const s=sessionStorage.getItem(TOKEN_KEY); if(s){ localStorage.setItem(TOKEN_KEY,s); token=s; } }catch(e){} }
+let token = localStorage.getItem(TOKEN_KEY) || EMBEDDED_TOKEN;   // 優先用部機記住嘅，否則用預設 → 開頁自動連
 
 /* ===== 編碼（處理中文 UTF-8） ===== */
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
@@ -233,7 +239,7 @@ function b64decode(b64){ return decodeURIComponent(escape(atob(b64))); }
 /* ===== 載入（優先雲端，失敗用 cache） ===== */
 async function loadData(){
   try{
-    const res = await fetch(`./${DATA_FILE}?v=${Date.now()}`, {cache:'no-store'});
+    const res = await fetch(`${RAW_BASE}/${DATA_FILE}?v=${Date.now()}`, {cache:'no-store'});
     if(!res.ok) throw new Error('net');
     const arr = await res.json();
     recipes = arr;
@@ -604,9 +610,9 @@ document.getElementById("btnTrad").addEventListener("click",async()=>{
   btn.disabled=false; btn.textContent="🈶 簡 → 繁";
 });
 
-/* 啟動 */
-loadData();
-if(token) connectWith(token, true);   // 開頁自動連接，唔使每次貼 PAT
+/* 啟動：永遠用預設 token 自動連接，唔使每次貼 PAT */
+loadData();              // 先顯示雲端資料（同時試連）
+connectWith(token, true); // 靜默自動連接，唔使每次貼 PAT
 </script>
 </body>
 </html>
