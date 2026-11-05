@@ -98,15 +98,20 @@
 </header>
 
 <div class="banner" id="banner">
-  💡 <b>點解要貼 GitHub PAT？</b> 睇食譜唔使密碼；但「加 / 改 / 刪」要寫入雲端，就要你個 GitHub 私人憑證（PAT）。
-  建議開一個 <b>fine-grained PAT，只授權呢個 recipes repo</b>，咁就算漏咗都唔会影響其他嘢。PAT 只會存在你次瀏覽（關咗 tab 就冇），<b>唔會寫入網頁</b>。
+  💡 <b>連接 GitHub 已記住喇</b>：你嘅 fine-grained PAT 會存落呢部機嘅瀏覽器，下次開網自動連接，唔使再貼。<br>
+  想斷開就去「🔧 管理後台」㩒「斷開」（共用電腦建議斷開）。📖 睇食譜唔使登入；「加 / 改 / 刪」先要 PAT。
 </div>
 
 <div class="toolbar">
   <input type="search" id="search" placeholder="🔍 搜尋菜名 / 材料 / 分類…">
   <select id="filterCat"><option value="">全部分類</option></select>
   <span class="spacer"></span>
-  <button class="btn btn-ghost" id="btnLang" title="切換 中文 / English 顯示">🌐 EN</button>
+  <select id="dispMode" title="顯示語言 / 字體（只改顯示，唔改資料）">
+    <option value="zh">中文</option>
+    <option value="en">English</option>
+    <option value="tw">繁體字</option>
+    <option value="cn">簡體字</option>
+  </select>
   <button class="btn btn-ghost" id="btnExport" title="匯出全部食譜做備份">⬇️ 匯出</button>
   <button class="btn btn-admin" id="btnAdmin">🔧 管理後台</button>
 </div>
@@ -145,7 +150,8 @@
 
 <footer>
   資料存在你 GitHub repo 嘅 <code>recipes.json</code>，經 github.io 公開睇得（編輯要 PAT）。<br>
-  手機開 <code>https://sa-lau.github.io/recipes/</code> 都得，登入後貼 PAT 就能加食譜。<br>
+  手機開 <code>https://sa-lau.github.io/recipes/</code> 都得，PAT 已記住就自動連接，可直接加食譜。<br>
+  頂部「中文 / English / 繁體 / 簡體」下拉只係改顯示，唔會改到你嘅資料。<br>
   Instagram / Facebook 有登入牆，片入面嘅菜名材料要你自己補。
 </footer>
 
@@ -213,8 +219,12 @@ const TOKEN_KEY = "myRecipes.gh_token";
 let recipes = [];
 let adminMode = false;
 let pendingPhoto = "";
-let langEn = false;
-let token = sessionStorage.getItem(TOKEN_KEY) || "";
+let dispMode = "zh";          // zh | en | tw | cn —— 只係顯示用，唔改資料
+let convCache = {};           // opencc converter cache
+let openccReady = false;
+let token = localStorage.getItem(TOKEN_KEY) || "";   // 永久存落部機，開頁自動連接
+// 升級兼容：舊版存咗喺 sessionStorage，自動搬去 localStorage，唔使重新貼
+if(!token){ try{ const s=sessionStorage.getItem(TOKEN_KEY); if(s){ localStorage.setItem(TOKEN_KEY,s); token=s; } }catch(e){} }
 
 /* ===== 編碼（處理中文 UTF-8） ===== */
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
@@ -297,10 +307,22 @@ function render(){
     tb.innerHTML=list.map((r,i)=>{
       const actions=adminMode?'<td><div class="actions"><button class="iconbtn" data-edit="'+r.id+'">✏️</button><button class="iconbtn" data-del="'+r.id+'">🗑</button></div></td>':'';
       const hasEn = r.dishEn || r.materialsEn || r.stepsEn;
-      const dishTxt = (langEn && r.dishEn) ? r.dishEn : (r.dish||"（未填寫菜名）");
-      const matsTxt = (langEn && r.materialsEn) ? r.materialsEn : r.materials;
-      const stepsTxt = (langEn && r.stepsEn) ? r.stepsEn : r.steps;
-      const enBadge = (!langEn && hasEn) ? '<span class="cat" style="background:#eef6f0;color:var(--green)">🌐 EN</span>' : '';
+      let dishTxt, matsTxt, stepsTxt;
+      if(dispMode==="en"){
+        dishTxt  = r.dishEn  || r.dish  || "（未填寫菜名）";
+        matsTxt  = r.materialsEn || r.materials;
+        stepsTxt = r.stepsEn || r.steps;
+      }else{
+        dishTxt  = r.dish  || "（未填寫菜名）";
+        matsTxt  = r.materials;
+        stepsTxt = r.steps;
+        if((dispMode==="tw"||dispMode==="cn") && openccReady){
+          dishTxt  = convTo(dishTxt,  dispMode);
+          matsTxt  = convTo(matsTxt,  dispMode);
+          stepsTxt = convTo(stepsTxt, dispMode);
+        }
+      }
+      const enBadge = (dispMode!=="en" && hasEn) ? '<span class="cat" style="background:#eef6f0;color:var(--green)">🌐 EN</span>' : '';
       return '<tr>'+
         '<td class="rowidx">'+(i+1)+'</td>'+
         '<td>'+photoCell(r)+'</td>'+
@@ -340,24 +362,31 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
   }
 });
 
-/* ===== 連接 GitHub ===== */
-document.getElementById("btnConnect").addEventListener("click",async()=>{
-  const v=document.getElementById("patInput").value.trim();
-  if(!v){toast("請先貼入 PAT");return;}
-  token=v; sessionStorage.setItem(TOKEN_KEY,token);
-  setStatus('off','測試連接中…');
+/* ===== 連接 GitHub（可重複使用：手動㩒 / 開頁自動連） ===== */
+async function connectWith(v, silent){
+  token=v; localStorage.setItem(TOKEN_KEY,token);
+  if(!silent) setStatus('off','測試連接中…');
   try{
     const api=`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
     const res=await fetch(api,{headers:{Authorization:'Bearer '+token}});
     if(!res.ok) throw new Error('fail');
     await res.json();
     setStatus('ok','已連接 ✅ 可以雲端同步');
-    toast("已連接 GitHub ✅");
+    if(!silent) toast("已連接 GitHub ✅");
     await loadData(); // 重新載入最新雲端資料
-  }catch(e){ token="";sessionStorage.removeItem(TOKEN_KEY);setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');toast("連接失敗，檢查 PAT"); }
+  }catch(e){
+    token="";localStorage.removeItem(TOKEN_KEY);
+    setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
+    if(!silent) toast("連接失敗，檢查 PAT");
+  }
+}
+document.getElementById("btnConnect").addEventListener("click",()=>{
+  const v=document.getElementById("patInput").value.trim();
+  if(!v){toast("請先貼入 PAT");return;}
+  connectWith(v,false);
 });
 document.getElementById("btnDisconnect").addEventListener("click",()=>{
-  token="";sessionStorage.removeItem(TOKEN_KEY);
+  token="";localStorage.removeItem(TOKEN_KEY);
   document.getElementById("patInput").value="";
   setStatus('off','未連接 · 只讀模式');toast("已斷開");
 });
@@ -492,12 +521,18 @@ document.getElementById("btnExport").addEventListener("click",()=>{
 document.getElementById("search").addEventListener("input",render);
 document.getElementById("filterCat").addEventListener("change",render);
 
-/* ===== 🌐 中/EN 切換 ===== */
-document.getElementById("btnLang").addEventListener("click",()=>{
-  langEn=!langEn;
-  document.getElementById("btnLang").textContent = langEn ? "🇬🇧 中文" : "🌐 EN";
+/* ===== 🌐 顯示模式：中文 / English / 繁體 / 簡體（只改顯示，唔改資料） ===== */
+document.getElementById("dispMode").addEventListener("change",async()=>{
+  dispMode=document.getElementById("dispMode").value;
+  if(dispMode==="tw"||dispMode==="cn"){
+    if(!openccReady){
+      toast("載入簡繁轉換…");
+      try{ await ensureConv(); openccReady=true; }
+      catch(e){ toast("簡繁轉換庫載入失敗，已用原字"); dispMode="zh"; document.getElementById("dispMode").value="zh"; render(); return; }
+    }
+    toast(dispMode==="tw" ? "已切換繁體顯示（只係睇，未改資料）" : "已切換簡體顯示（只係睇，未改資料）");
+  }
   render();
-  if(langEn) toast("切換 English 顯示（未有英文嘅食譜會顯示中文）");
 });
 
 /* ===== 🌐 自動翻譯（MyMemory 免費 API，只喺㩒掣時呼叫；支援雙向） ===== */
@@ -536,41 +571,42 @@ document.getElementById("btnTranslate").addEventListener("click",async()=>{
   btn.disabled=false; btn.textContent="🌐 自動翻譯";
 });
 
-/* ===== 🈶 簡 → 繁（lazy load opencc-js，只喺㩒掣時下載） ===== */
-let _opencc = null;
-async function getOpenCC(){
-  if(_opencc) return _opencc;
-  if(!window.OpenCC){
-    await new Promise((res,rej)=>{
-      const s=document.createElement("script");
-      s.src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js";
-      s.onload=res;
-      s.onerror=()=>rej(new Error("載入簡繁轉換庫失敗，請檢查網絡"));
-      document.head.appendChild(s);
-    });
-  }
-  _opencc = window.OpenCC.Converter({from:"cn", to:"tw"});
-  return _opencc;
+/* ===== 🈶 簡繁轉換（opencc-js，lazy load，只喺需要時下載） ===== */
+async function ensureConv(){
+  if(window.OpenCC) return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js";
+    s.onload=res;
+    s.onerror=()=>rej(new Error("載入簡繁轉換庫失敗，請檢查網絡"));
+    document.head.appendChild(s);
+  });
+}
+function convTo(text, to){ // to: 'tw' | 'cn'
+  if(!text) return text;
+  if(!convCache[to]) convCache[to]=window.OpenCC.Converter({from: to==="tw"?"cn":"tw", to});
+  return convCache[to](text);
 }
 document.getElementById("btnTrad").addEventListener("click",async()=>{
   const btn=document.getElementById("btnTrad");
   btn.disabled=true; btn.textContent="轉換中…";
   try{
-    const conv=await getOpenCC();
+    if(!openccReady){ await ensureConv(); openccReady=true; }
     let n=0;
     for(const id of ["f_dish","f_materials","f_steps"]){
       const el=document.getElementById(id);
       if(!el.value.trim()) continue;
-      const out=conv(el.value);
+      const out=convTo(el.value,"tw");
       if(out!==el.value){ el.value=out; n++; }
     }
-    toast(n? "🈶 已轉做繁體（"+n+" 欄）" : "已經係繁體，冇需轉換");
+    toast(n? "🈶 已轉做繁體（"+n+" 欄，已寫入雲端）" : "已經係繁體，冇需轉換");
   }catch(e){ toast("簡繁轉換失敗："+(e.message||e)); }
   btn.disabled=false; btn.textContent="🈶 簡 → 繁";
 });
 
 /* 啟動 */
 loadData();
+if(token) connectWith(token, true);   // 開頁自動連接，唔使每次貼 PAT
 </script>
 </body>
 </html>
