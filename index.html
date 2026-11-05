@@ -166,6 +166,12 @@
       <div class="field"><label>影片連結（IG / FB / YouTube 都得）</label><input type="url" id="f_video" placeholder="https://www.instagram.com/reel/…"></div>
       <div class="field"><label>材料（每行一項）</label><textarea id="f_materials" placeholder="唐芹 1 扎&#10;蒜頭 3 粒&#10;鹽 少許"></textarea></div>
       <div class="field"><label>步驟（每行一步，會自動變 1. 2. 3.）</label><textarea id="f_steps" placeholder="唐芹洗淨切段&#10;蒜頭剁蓉起鑊&#10;落芹菜兜炒，加鹽調味"></textarea></div>
+      <div class="field" style="background:#faf6ef;border:1px dashed var(--accent);border-radius:10px;padding:10px 12px">
+        <label>🪄 智能拆解（貼上影片字幕 / caption / 你抄嘅筆記 → 一鍵拆好材料同步驟）</label>
+        <textarea id="f_raw" placeholder="例如：&#10;🍳 蒜蓉炒唐芹&#10;材料：&#10;唐芹 1 扎&#10;蒜頭 3 粒&#10;鹽 少許&#10;做法：&#10;唐芹洗淨切段&#10;蒜頭剁蓉起鑊&#10;落芹菜兜炒，加鹽調味"></textarea>
+        <button type="button" class="btn btn-ghost" id="btnParse" style="margin-top:6px">🪄 拆解並填寫</button>
+        <div class="hint">自動辨認：第 1 行做菜名；含「材料 / Ingredients」一段做材料；含「做法 / 步驟 / Steps」一段做步驟。純本地運作，唔使上網、唔使搵 AI。</div>
+      </div>
       <div class="field"><label>備註（可留空）</label><input type="text" id="f_note" placeholder="小貼士、份量、來源…"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="btnCancel">取消</button>
@@ -390,6 +396,46 @@ document.getElementById("recipeForm").addEventListener("submit",async function(e
 });
 // 本地即時更新（樂觀），之後再由 push 覆寫
 function save(){ /* placeholder：實際寫入在 submit 內 */ }
+
+/* ===== 🪄 智能拆解：貼上文字 → 自動拆成 菜名/材料/步驟（純本地） ===== */
+function parseRecipeText(raw){
+  const lines = (raw||"").split(/\r?\n/).map(s=>s.replace(/^[-•*]\s*/,'').trim()).filter(Boolean);
+  let dish="", materials="", steps="", note="";
+  let matIdx=-1, stepIdx=-1;
+  lines.forEach((l,i)=>{
+    if(/^(材料|食材|配料|ingredient)/i.test(l) && matIdx<0) matIdx=i;
+    if(/^(做法|步驟|制法|steps?|method|procedure)/i.test(l) && stepIdx<0) stepIdx=i;
+  });
+  if(lines.length && matIdx!==0 && stepIdx!==0){
+    dish = lines[0].replace(/^[^一-龥A-Za-z0-9]+/,''); // 去開頭 emoji / 符號
+  }
+  const matLines=[], stepLines=[];
+  if(matIdx>=0 && stepIdx>=0){
+    for(let i=matIdx+1;i<stepIdx;i++) matLines.push(lines[i]);
+    for(let i=stepIdx+1;i<lines.length;i++) stepLines.push(lines[i]);
+  }else if(matIdx>=0){
+    for(let i=matIdx+1;i<lines.length;i++) matLines.push(lines[i]);
+  }else if(stepIdx>=0){
+    for(let i=stepIdx+1;i<lines.length;i++) stepLines.push(lines[i]);
+  }
+  // 無段落標題時，用「有冇份量字眼」推測：有→材料，無→步驟
+  if(!matLines.length && !stepLines.length && lines.length>1){
+    lines.slice(1).forEach(l=>{
+      /[\d一二三四五六七八九十百千]/.test(l) && /(碗|粒|個|克|g|kg|ml|l|條|張|塊|片|茶匙|匙|勺|適量|少許|份|杯|包|罐|隻|瓣|斤|両|磅)/i.test(l)
+        ? matLines.push(l) : stepLines.push(l);
+    });
+  }
+  return {dish, materials:matLines.join("\n"), steps:stepLines.join("\n"), note};
+}
+document.getElementById("btnParse").addEventListener("click",()=>{
+  const raw=document.getElementById("f_raw").value.trim();
+  if(!raw){toast("請先貼入文字");return;}
+  const p=parseRecipeText(raw);
+  if(p.dish) document.getElementById("f_dish").value=p.dish;
+  if(p.materials) document.getElementById("f_materials").value=p.materials;
+  if(p.steps) document.getElementById("f_steps").value=p.steps;
+  toast("🪄 已拆解填寫 ✓ 請檢查無誤再儲存");
+});
 
 document.getElementById("tbody").addEventListener("click",function(e){
   const ed=e.target.closest("[data-edit]");const dl=e.target.closest("[data-del]");
