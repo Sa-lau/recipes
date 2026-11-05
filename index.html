@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的食譜表 · My Recipes（GitHub 雲端後台）</title>
+<style>
+  :root{
+    --bg:#fffaf3; --card:#ffffff; --line:#f0e3d3; --accent:#e8743b;
+    --accent2:#c0392b; --text:#3a2e26; --muted:#9b8676; --green:#2e8b57;
+    --shadow:0 2px 10px rgba(192,57,43,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang HK","Microsoft YaHei",-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding:18px}
+  header{text-align:center;margin-bottom:12px}
+  header h1{font-size:1.6rem;color:var(--accent2);letter-spacing:1px}
+  header p{color:var(--muted);font-size:.85rem;margin-top:4px}
+
+  .toolbar{max-width:1100px;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .toolbar input,.toolbar select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.85rem;background:#fff;color:var(--text)}
+  .toolbar input[type=search]{flex:1;min-width:180px}
+  .spacer{flex:1}
+  .btn{border:none;cursor:pointer;padding:8px 14px;border-radius:20px;font-size:.8rem;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:.15s;white-space:nowrap}
+  .btn-admin{background:var(--accent2);color:#fff}
+  .btn-admin.on{background:#7a2418}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-ghost{background:#fff;color:var(--accent2);border:1px solid var(--line)}
+  .btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+
+  .banner{max-width:1100px;margin:0 auto 10px;background:#fff4e8;border:1px dashed var(--accent);border-radius:10px;padding:10px 12px;font-size:.8rem;color:var(--text)}
+  .banner b{color:var(--accent2)}
+  .count{font-size:.75rem;color:var(--muted);max-width:1100px;margin:0 auto 8px}
+  .statusdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .dot-ok{background:var(--green)} .dot-off{background:#bbb} .dot-err{background:var(--accent2)}
+
+  .tablewrap{max-width:1100px;margin:0 auto;overflow-x:auto;background:#fff;border-radius:14px;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:separate;border-spacing:0 10px;min-width:780px}
+  th{background:var(--accent2);color:#fff;font-size:.82rem;padding:12px 10px;text-align:left;position:sticky;top:0}
+  th:first-child{border-radius:12px 0 0 12px}
+  th:last-child{border-radius:0 12px 12px 0}
+  td{background:var(--card);border:1px solid var(--line);padding:12px;vertical-align:top;font-size:.85rem}
+  td:first-child{border-radius:12px 0 0 12px;border-right:none}
+  td:last-child{border-radius:0 12px 12px 0;border-left:none}
+  .rowidx{font-weight:700;color:var(--accent);font-size:1rem}
+  .dish{font-weight:700;color:var(--accent2);font-size:.98rem;margin-bottom:4px}
+  .cat{display:inline-block;background:#fff0e3;color:var(--accent);font-size:.68rem;padding:1px 8px;border-radius:10px;margin-left:6px;font-weight:700}
+  ul,ol{margin:0 0 0 1.1em;padding:0}
+  li{margin:2px 0}
+  .placeholder{color:var(--muted);font-style:italic;font-size:.8rem}
+  .note{color:var(--muted);font-size:.78rem;margin-top:4px}
+
+  .photo{display:flex;flex-direction:column;align-items:center;justify-content:center;width:128px;height:96px;border-radius:10px;cursor:pointer;text-decoration:none;background:linear-gradient(135deg,#ffd9b3,#ffb27a);color:#7a3b12;border:2px solid #fff;box-shadow:0 2px 8px rgba(232,116,59,.25);transition:.15s;overflow:hidden}
+  .photo:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(232,116,59,.4)}
+  .photo img{width:100%;height:100%;object-fit:cover}
+  .photo .play{font-size:1.6rem;line-height:1}
+  .photo .plat{font-size:.7rem;margin-top:4px;font-weight:700}
+  .photo .ph{font-size:.62rem;color:#9a5a2a;margin-top:2px}
+
+  .linkbtn{display:inline-block;background:var(--green);color:#fff;text-decoration:none;padding:6px 12px;border-radius:20px;font-size:.78rem;font-weight:700;white-space:nowrap}
+  .linkbtn:hover{background:#256e46}
+  .platform{font-size:.7rem;color:var(--muted);display:block;margin-bottom:4px}
+
+  .actions{display:flex;gap:6px}
+  .iconbtn{border:none;cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:.8rem}
+  .iconbtn:hover{background:#fff4e8}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px}
+
+  .overlay{position:fixed;inset:0;background:rgba(58,46,38,.45);display:none;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;z-index:50}
+  .overlay.show{display:flex}
+  .modal{background:#fff;border-radius:16px;max-width:560px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+  .modal h2{color:var(--accent2);font-size:1.15rem;margin-bottom:14px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:4px}
+  .field input[type=text],.field input[type=url],.field input[type=password],.field textarea,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:.85rem;font-family:inherit;color:var(--text)}
+  .field textarea{resize:vertical;min-height:72px}
+  .field .hint{font-size:.7rem;color:var(--muted);margin-top:2px}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+  .preview-img{max-width:120px;max-height:90px;border-radius:8px;margin-top:6px;border:1px solid var(--line)}
+
+  /* settings (GitHub connect) */
+  .settings{max-width:1100px;margin:0 auto 12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:none}
+  .settings.show{display:block}
+  .settings h3{font-size:.95rem;color:var(--accent2);margin-bottom:8px}
+  .settings .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .settings input[type=password]{flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+  .settings .hint{font-size:.72rem;color:var(--muted);margin-top:6px;line-height:1.5}
+  .settings code{background:#fff4e8;padding:1px 5px;border-radius:4px;font-size:.72rem}
+
+  footer{text-align:center;color:var(--muted);font-size:.72rem;margin-top:22px;max-width:1100px;margin-left:auto;margin-right:auto;line-height:1.6}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:24px;font-size:.82rem;opacity:0;transition:.25s;z-index:80;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍳 我的食譜表</h1>
+  <p>My Recipes · GitHub 雲端後台 · 部機手機自動同步</p>
+</header>
+
+<div class="banner" id="banner">
+  💡 <b>點解要貼 GitHub PAT？</b> 睇食譜唔使密碼；但「加 / 改 / 刪」要寫入雲端，就要你個 GitHub 私人憑證（PAT）。
+  建議開一個 <b>fine-grained PAT，只授權呢個 recipes repo</b>，咁就算漏咗都唔会影響其他嘢。PAT 只會存在你次瀏覽（關咗 tab 就冇），<b>唔會寫入網頁</b>。
+</div>
+
+<div class="toolbar">
+  <input type="search" id="search" placeholder="🔍 搜尋菜名 / 材料 / 分類…">
+  <select id="filterCat"><option value="">全部分類</option></select>
+  <span class="spacer"></span>
+  <button class="btn btn-ghost" id="btnExport" title="匯出全部食譜做備份">⬇️ 匯出</button>
+  <button class="btn btn-admin" id="btnAdmin">🔧 管理後台</button>
+</div>
+
+<div class="settings" id="settings">
+  <h3>🔐 連接 GitHub（用嚟雲端同步）</h3>
+  <div class="row">
+    <input type="password" id="patInput" placeholder="貼入你的 GitHub PAT（fine-grained，只授權 recipes repo）" autocomplete="off">
+    <button class="btn btn-green" id="btnConnect">連接</button>
+    <button class="btn btn-ghost" id="btnDisconnect">斷開</button>
+    <span id="connStatus"><span class="statusdot dot-off"></span>未連接</span>
+  </div>
+  <div class="hint">
+    ① 去 GitHub → Settings → Developer settings → <b>Personal access tokens → Fine-grained tokens</b> → Generate new token。<br>
+    ② Repository access 揀 <code>Only select repositories</code> → 揀你個 <code>recipes</code> repo；Permissions → Repository permissions → <code>Contents: Read and write</code>。<br>
+    ③ 複製個 token 貼上面 → 㩒「連接」。之後「加 / 改 / 刪」就會自動存去雲端，部機手機都同步。
+  </div>
+</div>
+
+<div class="count" id="count"></div>
+
+<div class="tablewrap">
+  <table>
+    <thead>
+      <tr id="headRow">
+        <th style="width:50px">#</th>
+        <th style="width:140px">相片 / 影片</th>
+        <th style="width:230px">菜名 + 材料</th>
+        <th>步驟</th>
+        <th style="width:120px">連結</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<footer>
+  資料存在你 GitHub repo 嘅 <code>recipes.json</code>，經 github.io 公開睇得（編輯要 PAT）。<br>
+  手機開 <code>https://sa-lau.github.io/recipes/</code> 都得，登入後貼 PAT 就能加食譜。<br>
+  Instagram / Facebook 有登入牆，片入面嘅菜名材料要你自己補。
+</footer>
+
+<!-- 新增 / 編輯 彈窗 -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">➕ 新增食譜</h2>
+    <form id="recipeForm">
+      <input type="hidden" id="f_id">
+      <div class="field"><label>菜名 *</label><input type="text" id="f_dish" placeholder="例如：蒜蓉炒唐芹" required></div>
+      <div class="field"><label>分類</label><input type="text" id="f_cat" list="catList" placeholder="例如：家常菜 / 湯 / 甜品"><datalist id="catList"></datalist></div>
+      <div class="field">
+        <label>相片（上傳電腦張相，或貼網址）</label>
+        <input type="file" id="f_photoFile" accept="image/*">
+        <div class="hint">上傳嘅相會變 base64 埋喺 recipes.json 入面（檔會大啲）；或者下面貼個圖片網址都得。</div>
+        <input type="url" id="f_photoUrl" placeholder="https://… 圖片網址（可留空）" style="margin-top:6px">
+        <img id="f_preview" class="preview-img" style="display:none">
+      </div>
+      <div class="field"><label>影片連結（IG / FB / YouTube 都得）</label><input type="url" id="f_video" placeholder="https://www.instagram.com/reel/…"></div>
+      <div class="field"><label>材料（每行一項）</label><textarea id="f_materials" placeholder="唐芹 1 扎&#10;蒜頭 3 粒&#10;鹽 少許"></textarea></div>
+      <div class="field"><label>步驟（每行一步，會自動變 1. 2. 3.）</label><textarea id="f_steps" placeholder="唐芹洗淨切段&#10;蒜頭剁蓉起鑊&#10;落芹菜兜炒，加鹽調味"></textarea></div>
+      <div class="field"><label>備註（可留空）</label><input type="text" id="f_note" placeholder="小貼士、份量、來源…"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="btnCancel">取消</button>
+        <button type="submit" class="btn btn-green">💾 儲存到雲端</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 設定：改呢度對應你個 repo ===== */
+const REPO = "Sa-lau/recipes";     // ← owner/repo，要同你上傳嘅 repo 名一樣
+const DATA_FILE = "recipes.json";
+const CACHE_KEY = "myRecipes.cache.v1";
+const TOKEN_KEY = "myRecipes.gh_token";
+
+/* ===== 狀態 ===== */
+let recipes = [];
+let adminMode = false;
+let pendingPhoto = "";
+let token = sessionStorage.getItem(TOKEN_KEY) || "";
+
+/* ===== 編碼（處理中文 UTF-8） ===== */
+function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(b64){ return decodeURIComponent(escape(atob(b64))); }
+
+/* ===== 載入（優先雲端，失敗用 cache） ===== */
+async function loadData(){
+  try{
+    const res = await fetch(`./${DATA_FILE}?v=${Date.now()}`, {cache:'no-store'});
+    if(!res.ok) throw new Error('net');
+    const arr = await res.json();
+    recipes = arr;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(arr));
+    setStatus(token? 'ok':'off', token? '已連接（雲端讀取中）':'未連接 · 只讀模式');
+  }catch(e){
+    const c = localStorage.getItem(CACHE_KEY);
+    if(c){ recipes = JSON.parse(c); setStatus('off','離線 · 顯示上次 cache'); }
+    else { recipes = []; setStatus('err','讀取失敗：確認 repo 已開 Pages 且有 recipes.json'); }
+  }
+  render();
+}
+
+/* ===== GitHub 寫入 ===== */
+async function pushToGitHub(){
+  if(!token){ toast('請先喺「連接 GitHub」貼入 PAT'); throw new Error('no token'); }
+  const api = `https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
+  const head = await fetch(api, {headers:{Authorization:'Bearer '+token}});
+  if(!head.ok) throw new Error('讀取檔案失敗（PAT 無權限或 repo 名錯？）');
+  const meta = await head.json();
+  const body = JSON.stringify({
+    message: "update recipes via app",
+    content: b64encode(JSON.stringify(recipes,null,2)),
+    sha: meta.sha
+  });
+  const put = await fetch(api, {method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body});
+  if(!put.ok){
+    const err = await put.json().catch(()=>({}));
+    throw new Error(err.message || ('寫入失敗 '+put.status));
+  }
+}
+
+/* ===== 渲染（同上版） ===== */
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2000);}
+function setStatus(kind,text){const s=document.getElementById("connStatus");const dot=kind==='ok'?'dot-ok':kind==='err'?'dot-err':'dot-off';s.innerHTML=`<span class="statusdot ${dot}"></span>${text}`;}
+function esc(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function linesToList(str,ordered){const items=(str||"").split("\n").map(x=>x.trim()).filter(Boolean);if(!items.length)return '<div class="placeholder">（未填寫）</div>';const tag=ordered?"ol":"ul";return "<"+tag+">"+items.map(i=>"<li>"+esc(i)+"</li>").join("")+"</"+tag+">";}
+function photoCell(r){
+  if(r.photo) return '<a class="photo" href="'+esc(r.photo)+'" target="_blank" rel="noopener"><img src="'+esc(r.photo)+'" alt="相片"></a>';
+  if(r.video) return '<a class="photo" href="'+esc(r.video)+'" target="_blank" rel="noopener"><span class="play">▶️</span><span class="plat">影片</span><span class="ph">點擊睇片</span></a>';
+  return '<div class="photo" style="background:#f3ece2;color:#9b8676;cursor:default"><span class="ph">（無相片）</span></div>';
+}
+function linkCell(r){
+  if(r.video){
+    const label=/instagram/i.test(r.video)?"Instagram":/facebook/i.test(r.video)?"Facebook":/youtube/i.test(r.video)?"YouTube":"影片";
+    return '<span class="platform">'+label+'</span><a class="linkbtn" href="'+esc(r.video)+'" target="_blank" rel="noopener">睇片 ↗️</a>';
+  }
+  return '<span class="placeholder">—</span>';
+}
+function uid(){return "r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+
+function render(){
+  const q=(document.getElementById("search").value||"").toLowerCase();
+  const cat=document.getElementById("filterCat").value;
+  let list=recipes.filter(r=>{
+    if(cat && r.cat!==cat) return false;
+    if(!q) return true;
+    return (r.dish+" "+(r.materials||"")+" "+(r.cat||"")+" "+(r.note||"")).toLowerCase().includes(q);
+  });
+  list.sort((a,b)=>(b.created||0)-(a.created||0));
+
+  const cats=[...new Set(recipes.map(r=>r.cat).filter(Boolean))].sort();
+  const fc=document.getElementById("filterCat");
+  fc.innerHTML='<option value="">全部分類</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+(c)+'</option>').join("");
+  fc.value=cat;
+  document.getElementById("catList").innerHTML=cats.map(c=>'<option value="'+esc(c)+'">').join("");
+
+  const tb=document.getElementById("tbody");
+  if(!list.length){tb.innerHTML='<tr><td colspan="'+(adminMode?6:5)+'"><div class="empty">暫時無食譜。㩒「🔧 管理後台」→「➕ 新增食譜」加第一道菜啦！</div></td></tr>';}
+  else{
+    tb.innerHTML=list.map((r,i)=>{
+      const actions=adminMode?'<td><div class="actions"><button class="iconbtn" data-edit="'+r.id+'">✏️</button><button class="iconbtn" data-del="'+r.id+'">🗑</button></div></td>':'';
+      return '<tr>'+
+        '<td class="rowidx">'+(i+1)+'</td>'+
+        '<td>'+photoCell(r)+'</td>'+
+        '<td><div class="dish">'+esc(r.dish||"（未填寫菜名）")+(r.cat?'<span class="cat">'+esc(r.cat)+'</span>':'')+'</div>'+
+            (r.dish? linesToList(r.materials,false):'<div class="placeholder">材料待補：點擊右邊連結睇片，或入後台填寫</div>')+
+            (r.note?'<div class="note">📝 '+esc(r.note)+'</div>':'')+'</td>'+
+        '<td>'+linesToList(r.steps,true)+'</td>'+
+        '<td>'+linkCell(r)+'</td>'+
+        actions+'</tr>';
+    }).join("");
+  }
+  const hr=document.getElementById("headRow");
+  if(adminMode && !hr.querySelector('th.action-col')) hr.insertAdjacentHTML("beforeend",'<th class="action-col" style="width:90px">操作</th>');
+  else if(!adminMode){const a=hr.querySelector('th.action-col');if(a)a.remove();}
+  document.getElementById("count").textContent="共 "+recipes.length+" 個食譜"+(list.length!==recipes.length?"（依篩選顯示 "+list.length+" 個）":"")+(adminMode?" · 後台模式開啟":"");
+}
+
+/* ===== 後台開關 ===== */
+document.getElementById("btnAdmin").addEventListener("click",()=>{
+  if(!adminMode){
+    adminMode=true;
+    document.getElementById("btnAdmin").classList.add("on");
+    document.getElementById("btnAdmin").textContent="🔧 後台開啟";
+    document.getElementById("settings").classList.add("show");
+    if(!document.getElementById("btnAdd")){
+      const b=document.createElement("button");b.id="btnAdd";b.className="btn btn-green";b.textContent="➕ 新增食譜";
+      b.addEventListener("click",()=>openModal());document.querySelector(".toolbar").appendChild(b);
+    }
+    render();
+  }else{
+    adminMode=false;
+    document.getElementById("btnAdmin").classList.remove("on");
+    document.getElementById("btnAdmin").textContent="🔧 管理後台";
+    document.getElementById("settings").classList.remove("show");
+    const b=document.getElementById("btnAdd");if(b)b.remove();
+    render();
+  }
+});
+
+/* ===== 連接 GitHub ===== */
+document.getElementById("btnConnect").addEventListener("click",async()=>{
+  const v=document.getElementById("patInput").value.trim();
+  if(!v){toast("請先貼入 PAT");return;}
+  token=v; sessionStorage.setItem(TOKEN_KEY,token);
+  setStatus('off','測試連接中…');
+  try{
+    const api=`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
+    const res=await fetch(api,{headers:{Authorization:'Bearer '+token}});
+    if(!res.ok) throw new Error('fail');
+    await res.json();
+    setStatus('ok','已連接 ✅ 可以雲端同步');
+    toast("已連接 GitHub ✅");
+    await loadData(); // 重新載入最新雲端資料
+  }catch(e){ token="";sessionStorage.removeItem(TOKEN_KEY);setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');toast("連接失敗，檢查 PAT"); }
+});
+document.getElementById("btnDisconnect").addEventListener("click",()=>{
+  token="";sessionStorage.removeItem(TOKEN_KEY);
+  document.getElementById("patInput").value="";
+  setStatus('off','未連接 · 只讀模式');toast("已斷開");
+});
+
+/* ===== 新增 / 編輯 ===== */
+const overlay=document.getElementById("overlay");
+function openModal(id){
+  pendingPhoto="";document.getElementById("f_preview").style.display="none";document.getElementById("recipeForm").reset();
+  if(id){
+    const r=recipes.find(x=>x.id===id);if(!r)return;
+    document.getElementById("modalTitle").textContent="✏️ 編輯食譜";
+    document.getElementById("f_id").value=r.id;
+    document.getElementById("f_dish").value=r.dish||"";
+    document.getElementById("f_cat").value=r.cat||"";
+    document.getElementById("f_photoUrl").value=r.photo&&!r.photo.startsWith("data:")?r.photo:"";
+    document.getElementById("f_video").value=r.video||"";
+    document.getElementById("f_materials").value=r.materials||"";
+    document.getElementById("f_steps").value=r.steps||"";
+    document.getElementById("f_note").value=r.note||"";
+    pendingPhoto=(r.photo&&r.photo.startsWith("data:"))?r.photo:"";
+    if(pendingPhoto){const p=document.getElementById("f_preview");p.src=pendingPhoto;p.style.display="block";}
+  }else{
+    document.getElementById("modalTitle").textContent="➕ 新增食譜";
+    document.getElementById("f_id").value="";
+  }
+  overlay.classList.add("show");
+}
+function closeModal(){overlay.classList.remove("show");}
+document.getElementById("btnCancel").addEventListener("click",closeModal);
+overlay.addEventListener("click",e=>{if(e.target===overlay)closeModal();});
+document.getElementById("f_photoFile").addEventListener("change",function(){
+  const f=this.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{pendingPhoto=rd.result;const p=document.getElementById("f_preview");p.src=pendingPhoto;p.style.display="block";};
+  rd.readAsDataURL(f);
+});
+document.getElementById("f_photoUrl").addEventListener("input",function(){
+  const u=this.value.trim();if(u){pendingPhoto=u;const p=document.getElementById("f_preview");p.src=u;p.style.display="block";}
+});
+document.getElementById("recipeForm").addEventListener("submit",async function(e){
+  e.preventDefault();
+  if(!token){alert("請先喺上方「連接 GitHub」貼入 PAT，先可以儲存去雲端。");return;}
+  const id=document.getElementById("f_id").value;
+  const photo=pendingPhoto||document.getElementById("f_photoUrl").value.trim()||"";
+  const data={
+    dish:document.getElementById("f_dish").value.trim(),
+    cat:document.getElementById("f_cat").value.trim(),
+    photo, video:document.getElementById("f_video").value.trim(),
+    materials:document.getElementById("f_materials").value.trim(),
+    steps:document.getElementById("f_steps").value.trim(),
+    note:document.getElementById("f_note").value.trim()
+  };
+  if(id){const r=recipes.find(x=>x.id===id);Object.assign(r,data);toast("更新中…");}
+  else{recipes.push({id:uid(),created:Date.now(),...data});toast("新增中…");}
+  try{
+    save(); // 先更新本地顯示
+    await pushToGitHub();
+    localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
+    toast("已儲存到雲端 ✅");
+  }catch(err){ toast("雲端儲存失敗："+(err.message||err)); }
+  closeModal(); render();
+});
+// 本地即時更新（樂觀），之後再由 push 覆寫
+function save(){ /* placeholder：實際寫入在 submit 內 */ }
+
+document.getElementById("tbody").addEventListener("click",function(e){
+  const ed=e.target.closest("[data-edit]");const dl=e.target.closest("[data-del]");
+  if(ed)openModal(ed.getAttribute("data-edit"));
+  if(dl){
+    const id=dl.getAttribute("data-del");const r=recipes.find(x=>x.id===id);
+    if(!confirm("確定刪除「"+(r.dish||"此食譜")+"」？"))return;
+    if(!token){alert("請先連接 GitHub 先可以刪除（要寫入雲端）。");return;}
+    recipes=recipes.filter(x=>x.id!==id);render();
+    pushToGitHub().then(()=>toast("已刪除 🗑")).catch(err=>toast("刪除失敗："+(err.message||err)));
+  }
+});
+
+/* ===== 匯出備份 ===== */
+document.getElementById("btnExport").addEventListener("click",()=>{
+  const blob=new Blob([JSON.stringify(recipes,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="我的食譜備份_"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(a.href);
+  toast("已匯出備份 ⬇️");
+});
+
+/* ===== 搜尋 ===== */
+document.getElementById("search").addEventListener("input",render);
+document.getElementById("filterCat").addEventListener("change",render);
+
+/* 啟動 */
+loadData();
+</script>
+</body>
+</html>
