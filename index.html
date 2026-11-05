@@ -106,6 +106,7 @@
   <input type="search" id="search" placeholder="🔍 搜尋菜名 / 材料 / 分類…">
   <select id="filterCat"><option value="">全部分類</option></select>
   <span class="spacer"></span>
+  <button class="btn btn-ghost" id="btnLang" title="切換 中文 / English 顯示">🌐 EN</button>
   <button class="btn btn-ghost" id="btnExport" title="匯出全部食譜做備份">⬇️ 匯出</button>
   <button class="btn btn-admin" id="btnAdmin">🔧 管理後台</button>
 </div>
@@ -166,6 +167,14 @@
       <div class="field"><label>影片連結（IG / FB / YouTube 都得）</label><input type="url" id="f_video" placeholder="https://www.instagram.com/reel/…"></div>
       <div class="field"><label>材料（每行一項）</label><textarea id="f_materials" placeholder="唐芹 1 扎&#10;蒜頭 3 粒&#10;鹽 少許"></textarea></div>
       <div class="field"><label>步驟（每行一步，會自動變 1. 2. 3.）</label><textarea id="f_steps" placeholder="唐芹洗淨切段&#10;蒜頭剁蓉起鑊&#10;落芹菜兜炒，加鹽調味"></textarea></div>
+      <div class="field" style="background:#f2f8f4;border:1px dashed var(--green);border-radius:10px;padding:10px 12px">
+        <label>🌐 English（可留空；填咗就可以喺瀏覽時切換 EN 顯示）</label>
+        <input type="text" id="f_dish_en" placeholder="Dish name, e.g. Stir-fried Celery with Garlic">
+        <textarea id="f_materials_en" placeholder="Materials (one per line), e.g. 1 bunch celery" style="margin-top:6px"></textarea>
+        <textarea id="f_steps_en" placeholder="Steps (one per line)" style="margin-top:6px"></textarea>
+        <button type="button" class="btn btn-ghost" id="btnTranslate" style="margin-top:6px;border-color:var(--green);color:var(--green)">🌐 自動翻譯（中文 → English）</button>
+        <div class="hint">用 MyMemory 免費翻譯 API；只有你㩒呢個掣先會呼叫（瀏覽模式唔會觸發任何 API）。譯完請檢查 執靚啲先儲存。只會填空欄，唔會蓋走你填過嘅英文。</div>
+      </div>
       <div class="field" style="background:#faf6ef;border:1px dashed var(--accent);border-radius:10px;padding:10px 12px">
         <label>🪄 智能拆解（貼上影片字幕 / caption / 你抄嘅筆記 → 一鍵拆好材料同步驟）</label>
         <textarea id="f_raw" placeholder="例如：&#10;🍳 蒜蓉炒唐芹&#10;材料：&#10;唐芹 1 扎&#10;蒜頭 3 粒&#10;鹽 少許&#10;做法：&#10;唐芹洗淨切段&#10;蒜頭剁蓉起鑊&#10;落芹菜兜炒，加鹽調味"></textarea>
@@ -194,6 +203,7 @@ const TOKEN_KEY = "myRecipes.gh_token";
 let recipes = [];
 let adminMode = false;
 let pendingPhoto = "";
+let langEn = false;
 let token = sessionStorage.getItem(TOKEN_KEY) || "";
 
 /* ===== 編碼（處理中文 UTF-8） ===== */
@@ -276,13 +286,18 @@ function render(){
   else{
     tb.innerHTML=list.map((r,i)=>{
       const actions=adminMode?'<td><div class="actions"><button class="iconbtn" data-edit="'+r.id+'">✏️</button><button class="iconbtn" data-del="'+r.id+'">🗑</button></div></td>':'';
+      const hasEn = r.dishEn || r.materialsEn || r.stepsEn;
+      const dishTxt = (langEn && r.dishEn) ? r.dishEn : (r.dish||"（未填寫菜名）");
+      const matsTxt = (langEn && r.materialsEn) ? r.materialsEn : r.materials;
+      const stepsTxt = (langEn && r.stepsEn) ? r.stepsEn : r.steps;
+      const enBadge = (!langEn && hasEn) ? '<span class="cat" style="background:#eef6f0;color:var(--green)">🌐 EN</span>' : '';
       return '<tr>'+
         '<td class="rowidx">'+(i+1)+'</td>'+
         '<td>'+photoCell(r)+'</td>'+
-        '<td><div class="dish">'+esc(r.dish||"（未填寫菜名）")+(r.cat?'<span class="cat">'+esc(r.cat)+'</span>':'')+'</div>'+
-            (r.dish? linesToList(r.materials,false):'<div class="placeholder">材料待補：點擊右邊連結睇片，或入後台填寫</div>')+
+        '<td><div class="dish">'+esc(dishTxt)+(r.cat?'<span class="cat">'+esc(r.cat)+'</span>':'')+enBadge+'</div>'+
+            (r.dish? linesToList(matsTxt,false):'<div class="placeholder">材料待補：點擊右邊連結睇片，或入後台填寫</div>')+
             (r.note?'<div class="note">📝 '+esc(r.note)+'</div>':'')+'</td>'+
-        '<td>'+linesToList(r.steps,true)+'</td>'+
+        '<td>'+linesToList(stepsTxt,true)+'</td>'+
         '<td>'+linkCell(r)+'</td>'+
         actions+'</tr>';
     }).join("");
@@ -351,6 +366,9 @@ function openModal(id){
     document.getElementById("f_video").value=r.video||"";
     document.getElementById("f_materials").value=r.materials||"";
     document.getElementById("f_steps").value=r.steps||"";
+    document.getElementById("f_dish_en").value=r.dishEn||"";
+    document.getElementById("f_materials_en").value=r.materialsEn||"";
+    document.getElementById("f_steps_en").value=r.stepsEn||"";
     document.getElementById("f_note").value=r.note||"";
     pendingPhoto=(r.photo&&r.photo.startsWith("data:"))?r.photo:"";
     if(pendingPhoto){const p=document.getElementById("f_preview");p.src=pendingPhoto;p.style.display="block";}
@@ -382,6 +400,9 @@ document.getElementById("recipeForm").addEventListener("submit",async function(e
     photo, video:document.getElementById("f_video").value.trim(),
     materials:document.getElementById("f_materials").value.trim(),
     steps:document.getElementById("f_steps").value.trim(),
+    dishEn:document.getElementById("f_dish_en").value.trim(),
+    materialsEn:document.getElementById("f_materials_en").value.trim(),
+    stepsEn:document.getElementById("f_steps_en").value.trim(),
     note:document.getElementById("f_note").value.trim()
   };
   if(id){const r=recipes.find(x=>x.id===id);Object.assign(r,data);toast("更新中…");}
@@ -460,6 +481,44 @@ document.getElementById("btnExport").addEventListener("click",()=>{
 /* ===== 搜尋 ===== */
 document.getElementById("search").addEventListener("input",render);
 document.getElementById("filterCat").addEventListener("change",render);
+
+/* ===== 🌐 中/EN 切換 ===== */
+document.getElementById("btnLang").addEventListener("click",()=>{
+  langEn=!langEn;
+  document.getElementById("btnLang").textContent = langEn ? "🇬🇧 中文" : "🌐 EN";
+  render();
+  if(langEn) toast("切換 English 顯示（未有英文嘅食譜會顯示中文）");
+});
+
+/* ===== 🌐 自動翻譯（MyMemory 免費 API，只喺㩒掣時呼叫） ===== */
+async function mmTranslate(text){
+  const url="https://api.mymemory.translated.net/get?q="+encodeURIComponent(text)+"&langpair=zh-TW|en";
+  const res=await fetch(url);
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const j=await res.json();
+  const t=j && j.responseData && j.responseData.translatedText;
+  if(!t || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(t)) throw new Error("翻譯服務暫時唔得（可能超額，請遲啲再試）");
+  return t;
+}
+document.getElementById("btnTranslate").addEventListener("click",async()=>{
+  const btn=document.getElementById("btnTranslate");
+  btn.disabled=true; btn.textContent="🌐 翻譯中…";
+  try{
+    const d=document.getElementById("f_dish").value.trim();
+    if(d && !document.getElementById("f_dish_en").value.trim())
+      document.getElementById("f_dish_en").value=await mmTranslate(d);
+    for(const pair of [["f_materials","f_materials_en"],["f_steps","f_steps_en"]]){
+      const s=document.getElementById(pair[0]).value.trim();
+      if(!s || document.getElementById(pair[1]).value.trim()) continue;
+      const lines=s.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      const out=[];
+      for(const l of lines) out.push(await mmTranslate(l));
+      document.getElementById(pair[1]).value=out.join("\n");
+    }
+    toast("🌐 已翻譯 ✓ 請檢查 執靚先儲存");
+  }catch(e){ toast("翻譯失敗："+(e.message||e)); }
+  btn.disabled=false; btn.textContent="🌐 自動翻譯（中文 → English）";
+});
 
 /* 啟動 */
 loadData();
