@@ -172,8 +172,17 @@
         <input type="text" id="f_dish_en" placeholder="Dish name, e.g. Stir-fried Celery with Garlic">
         <textarea id="f_materials_en" placeholder="Materials (one per line), e.g. 1 bunch celery" style="margin-top:6px"></textarea>
         <textarea id="f_steps_en" placeholder="Steps (one per line)" style="margin-top:6px"></textarea>
-        <button type="button" class="btn btn-ghost" id="btnTranslate" style="margin-top:6px;border-color:var(--green);color:var(--green)">🌐 自動翻譯（中文 → English）</button>
-        <div class="hint">用 MyMemory 免費翻譯 API；只有你㩒呢個掣先會呼叫（瀏覽模式唔會觸發任何 API）。譯完請檢查 執靚啲先儲存。只會填空欄，唔會蓋走你填過嘅英文。</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">
+          <select id="transDir" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.82rem;background:#fff;color:var(--text)">
+            <option value="zh2en">中文 → English</option>
+            <option value="en2zh">English → 中文</option>
+          </select>
+          <button type="button" class="btn btn-ghost" id="btnTranslate" style="border-color:var(--green);color:var(--green)">🌐 自動翻譯</button>
+        </div>
+        <div class="hint">
+          用 MyMemory 免費翻譯 API；只有你㩒呢個掣先會呼叫（瀏覽模式唔會觸發任何 API）。<br>
+          <b>中文 → English</b>：用中文欄譯去英文欄；<b>English → 中文</b>：用英文欄譯返中文欄。只會填「空嘅欄」，唔會蓋走你已填嘅內容。
+        </div>
       </div>
       <div class="field" style="background:#faf6ef;border:1px dashed var(--accent);border-radius:10px;padding:10px 12px">
         <label>🪄 智能拆解（貼上影片字幕 / caption / 你抄嘅筆記 → 一鍵拆好材料同步驟）</label>
@@ -490,34 +499,40 @@ document.getElementById("btnLang").addEventListener("click",()=>{
   if(langEn) toast("切換 English 顯示（未有英文嘅食譜會顯示中文）");
 });
 
-/* ===== 🌐 自動翻譯（MyMemory 免費 API，只喺㩒掣時呼叫） ===== */
-async function mmTranslate(text){
-  const url="https://api.mymemory.translated.net/get?q="+encodeURIComponent(text)+"&langpair=zh-TW|en";
+/* ===== 🌐 自動翻譯（MyMemory 免費 API，只喺㩒掣時呼叫；支援雙向） ===== */
+async function mmTranslate(text, langpair){
+  const url="https://api.mymemory.translated.net/get?q="+encodeURIComponent(text)+"&langpair="+encodeURIComponent(langpair);
   const res=await fetch(url);
   if(!res.ok) throw new Error("HTTP "+res.status);
   const j=await res.json();
   const t=j && j.responseData && j.responseData.translatedText;
-  if(!t || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(t)) throw new Error("翻譯服務暫時唔得（可能超額，請遲啲再試）");
+  if(!t || /MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID/i.test(t)) throw new Error("翻譯服務暫時唔得（可能超額，請遲啲再試）");
   return t;
 }
 document.getElementById("btnTranslate").addEventListener("click",async()=>{
   const btn=document.getElementById("btnTranslate");
+  const dir=document.getElementById("transDir").value; // zh2en | en2zh
+  const pair = dir==="en2zh" ? "en|zh-TW" : "zh-TW|en";
+  // [來源欄, 目標欄]
+  const fields = dir==="en2zh"
+    ? [["f_dish_en","f_dish"],["f_materials_en","f_materials"],["f_steps_en","f_steps"]]
+    : [["f_dish","f_dish_en"],["f_materials","f_materials_en"],["f_steps","f_steps_en"]];
   btn.disabled=true; btn.textContent="🌐 翻譯中…";
+  let done=0, skipped=0;
   try{
-    const d=document.getElementById("f_dish").value.trim();
-    if(d && !document.getElementById("f_dish_en").value.trim())
-      document.getElementById("f_dish_en").value=await mmTranslate(d);
-    for(const pair of [["f_materials","f_materials_en"],["f_steps","f_steps_en"]]){
-      const s=document.getElementById(pair[0]).value.trim();
-      if(!s || document.getElementById(pair[1]).value.trim()) continue;
-      const lines=s.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    for(const [srcId,dstId] of fields){
+      const src=document.getElementById(srcId).value.trim();
+      const dstEl=document.getElementById(dstId);
+      if(!src || dstEl.value.trim()){ skipped++; continue; }   // 空來源 / 目標已有內容 → 跳過
+      const lines=src.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
       const out=[];
-      for(const l of lines) out.push(await mmTranslate(l));
-      document.getElementById(pair[1]).value=out.join("\n");
+      for(const l of lines) out.push(await mmTranslate(l, pair));
+      dstEl.value=out.join("\n");
+      done++;
     }
-    toast("🌐 已翻譯 ✓ 請檢查 執靚先儲存");
+    toast(done ? "🌐 已翻譯 "+done+" 欄 ✓ 請檢查 執靚先儲存" : "冇嘢可譯（來源空白，或目標欄已有內容）");
   }catch(e){ toast("翻譯失敗："+(e.message||e)); }
-  btn.disabled=false; btn.textContent="🌐 自動翻譯（中文 → English）";
+  btn.disabled=false; btn.textContent="🌐 自動翻譯";
 });
 
 /* 啟動 */
