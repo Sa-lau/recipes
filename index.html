@@ -85,6 +85,10 @@
   .settings input[type=password]{flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
   .settings .hint{font-size:.72rem;color:var(--muted);margin-top:6px;line-height:1.5}
   .settings code{background:#fff4e8;padding:1px 5px;border-radius:4px;font-size:.72rem}
+  .conn-ok{font-size:.84rem;color:var(--green);font-weight:700;line-height:1.7}
+  .conn-edit{margin-top:8px}
+  .linkbtn2{background:none;border:none;color:var(--accent2);cursor:pointer;font-size:.78rem;font-weight:700;text-decoration:underline;padding:4px 2px}
+  .linkbtn2:hover{color:#7a2418}
 
   footer{text-align:center;color:var(--muted);font-size:.72rem;margin-top:22px;max-width:1100px;margin-left:auto;margin-right:auto;line-height:1.6}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:24px;font-size:.82rem;opacity:0;transition:.25s;z-index:80;pointer-events:none}
@@ -117,19 +121,28 @@
 </div>
 
 <div class="settings" id="settings">
-  <h3>🔐 連接 GitHub（用嚟雲端同步）</h3>
-  <div class="row">
-    <input type="password" id="patInput" placeholder="貼入你的 GitHub PAT（fine-grained，只授權 recipes repo）" autocomplete="off">
-    <button class="btn btn-green" id="btnConnect">連接</button>
-    <button class="btn btn-ghost" id="btnDisconnect">斷開</button>
-    <span id="connStatus"><span class="statusdot dot-off"></span>未連接</span>
+  <h3>🔐 連接狀態（雲端同步）</h3>
+  <div id="connOk" class="conn-ok">
+    ✅ <b>已自動連接</b> — 開網即用預設 token，可直接加 / 改 / 刪食譜，<b>唔使記、唔使填任何嘢</b>。
+    <button type="button" class="linkbtn2" id="btnShowToken">🔑 更換 / 用其他 token</button>
   </div>
-  <div class="hint">
-    ✅ 已經用預設 token 自動連接，一般唔使理呢個 panel。<br>
-    ① 去 GitHub → Settings → Developer settings → <b>Personal access tokens → Fine-grained tokens</b> → Generate new token。<br>
-    ② Repository access 揀 <code>Only select repositories</code> → 揀你個 <code>recipes</code> repo；Permissions → Repository permissions → <code>Contents: Read and write</code>。<br>
-    ③ 想用你自己嘅 token（取代預設），複製貼上面 → 㩒「連接」就得。
+  <div id="connEdit" class="conn-edit" style="display:none">
+    <div class="row">
+      <input type="password" id="patInput" placeholder="貼入你的 GitHub PAT（fine-grained，只授權 recipes repo）" autocomplete="off">
+      <button class="btn btn-green" id="btnConnect">連接</button>
+      <button class="btn btn-ghost" id="btnDisconnect">斷開（只讀）</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="linkbtn2" id="btnHideToken">收起 ▲</button>
+    </div>
+    <div class="hint">
+      想用你自己嘅 token（取代預設）才需要填：<br>
+      ① GitHub → Settings → Developer settings → <b>Personal access tokens → Fine-grained tokens</b> → Generate new token。<br>
+      ② Repository access 揀 <code>Only select repositories</code> → 揀 <code>recipes</code> repo；<code>Contents: Read and write</code>。<br>
+      ③ 複製 token 貼上面 → 㩒「連接」。
+    </div>
   </div>
+  <div id="connStatus" style="margin-top:8px;font-size:.8rem;font-weight:700"></div>
 </div>
 
 <div class="count" id="count"></div>
@@ -369,6 +382,8 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
 });
 
 /* ===== 連接 GitHub（可重複使用：手動㩒 / 開頁自動連） ===== */
+function showConnOk(){ document.getElementById("connEdit").style.display="none"; document.getElementById("connOk").style.display = token ? "block" : "none"; }
+function showConnEdit(){ document.getElementById("connOk").style.display="none"; document.getElementById("connEdit").style.display="block"; }
 async function connectWith(v, silent){
   token=v; localStorage.setItem(TOKEN_KEY,token);
   if(!silent) setStatus('off','測試連接中…');
@@ -379,11 +394,13 @@ async function connectWith(v, silent){
     await res.json();
     setStatus('ok','已連接 ✅ 可以雲端同步');
     if(!silent) toast("已連接 GitHub ✅");
+    showConnOk();
     await loadData(); // 重新載入最新雲端資料
   }catch(e){
     token="";localStorage.removeItem(TOKEN_KEY);
     setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
     if(!silent) toast("連接失敗，檢查 PAT");
+    showConnEdit();
   }
 }
 document.getElementById("btnConnect").addEventListener("click",()=>{
@@ -394,8 +411,11 @@ document.getElementById("btnConnect").addEventListener("click",()=>{
 document.getElementById("btnDisconnect").addEventListener("click",()=>{
   token="";localStorage.removeItem(TOKEN_KEY);
   document.getElementById("patInput").value="";
-  setStatus('off','未連接 · 只讀模式');toast("已斷開");
+  setStatus('off','未連接 · 只讀模式');toast("已斷開（重新整理網頁會用返預設連接）");
+  showConnEdit();
 });
+document.getElementById("btnShowToken").addEventListener("click",showConnEdit);
+document.getElementById("btnHideToken").addEventListener("click",showConnOk);
 
 /* ===== 新增 / 編輯 ===== */
 const overlay=document.getElementById("overlay");
@@ -611,6 +631,7 @@ document.getElementById("btnTrad").addEventListener("click",async()=>{
 });
 
 /* 啟動：永遠用預設 token 自動連接，唔使每次貼 PAT */
+showConnOk();            // 預設收埋 token 輸入框，只顯示「已自動連接」
 loadData();              // 先顯示雲端資料（同時試連）
 connectWith(token, true); // 靜默自動連接，唔使每次貼 PAT
 </script>
