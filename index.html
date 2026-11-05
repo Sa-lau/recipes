@@ -42,6 +42,8 @@
   td:first-child{border-radius:12px 0 0 12px;border-right:none}
   td:last-child{border-radius:0 12px 12px 0;border-left:none}
   .rowidx{font-weight:700;color:var(--accent);font-size:1rem}
+  .sel-col{width:36px;text-align:center}
+  .selbox{width:16px;height:16px;cursor:pointer}
   .dish{font-weight:700;color:var(--accent2);font-size:.98rem;margin-bottom:4px}
   .cat{display:inline-block;background:#fff0e3;color:var(--accent);font-size:.68rem;padding:1px 8px;border-radius:10px;margin-left:6px;font-weight:700}
   ul,ol{margin:0 0 0 1.1em;padding:0}
@@ -67,17 +69,18 @@
 
   .overlay{position:fixed;inset:0;background:rgba(58,46,38,.45);display:none;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;z-index:50}
   .overlay.show{display:flex}
-  .modal{background:#fff;border-radius:16px;max-width:560px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+  .modal{background:#fff;border-radius:16px;max-width:580px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
   .modal h2{color:var(--accent2);font-size:1.15rem;margin-bottom:14px}
   .field{margin-bottom:12px}
   .field label{display:block;font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:4px}
-  .field input[type=text],.field input[type=url],.field input[type=password],.field textarea,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:.85rem;font-family:inherit;color:var(--text)}
+  .field input[type=text],.field input[type=url],.field input[type=password],.field input[type=file],.field textarea,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:.85rem;font-family:inherit;color:var(--text)}
   .field textarea{resize:vertical;min-height:72px}
   .field .hint{font-size:.7rem;color:var(--muted);margin-top:2px}
+  .row-inline{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .row-inline select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.82rem;background:#fff;color:var(--text)}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
   .preview-img{max-width:120px;max-height:90px;border-radius:8px;margin-top:6px;border:1px solid var(--line)}
 
-  /* settings (GitHub connect) */
   .settings{max-width:1100px;margin:0 auto 12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:none}
   .settings.show{display:block}
   .settings h3{font-size:.95rem;color:var(--accent2);margin-bottom:8px}
@@ -90,8 +93,13 @@
   .linkbtn2{background:none;border:none;color:var(--accent2);cursor:pointer;font-size:.78rem;font-weight:700;text-decoration:underline;padding:4px 2px}
   .linkbtn2:hover{color:#7a2418}
 
+  .catmgr-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .catmgr-row input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.85rem}
+  .catmgr-row .cnt{font-size:.72rem;color:var(--muted);min-width:64px}
+  .catmgr-row .delbtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--accent2);font-size:.78rem}
+
   footer{text-align:center;color:var(--muted);font-size:.72rem;margin-top:22px;max-width:1100px;margin-left:auto;margin-right:auto;line-height:1.6}
-  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:24px;font-size:.82rem;opacity:0;transition:.25s;z-index:80;pointer-events:none}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:24px;font-size:.82rem;opacity:0;transition:.25s;z-index:80;pointer-events:none;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
 </style>
 </head>
@@ -103,6 +111,7 @@
 
 <div class="banner" id="banner">
   ✅ <b>已經自動連接 GitHub 喇</b>：開網即自動連雲端，唔使貼 token，部機手機都直接加 / 改 / 刪食譜。<br>
+  後台可以做：➕ 新增、✏️ 編輯、🗑 刪除、🏷 改分類名、🌐 翻譯（中↔英）、⬇️ 匯出 Excel / PDF。<br>
   「🔧 管理後台」入面嘅「連接 GitHub」係備用：你想用自己第個 token 先需要填。📖 睇食譜唔使登入。
 </div>
 
@@ -116,7 +125,7 @@
     <option value="tw">繁體字</option>
     <option value="cn">簡體字</option>
   </select>
-  <button class="btn btn-ghost" id="btnExport" title="匯出全部食譜做備份">⬇️ 匯出</button>
+  <button class="btn btn-ghost" id="btnExport" title="匯出：JSON / Excel / PDF，可揀全部或只選中">⬇️ 匯出</button>
   <button class="btn btn-admin" id="btnAdmin">🔧 管理後台</button>
 </div>
 
@@ -176,34 +185,34 @@
     <form id="recipeForm">
       <input type="hidden" id="f_id">
       <div class="field"><label>菜名 *</label><input type="text" id="f_dish" placeholder="例如：蒜蓉炒唐芹" required></div>
+
+      <!-- 翻譯搬到最頂：智能辨別中英方向，唔使再落下面搵 -->
+      <div class="row-inline" style="background:#f2f8f4;border:1px dashed var(--green);border-radius:10px;padding:8px 10px">
+        <select id="transDir">
+          <option value="auto">🌐 自動辨別方向（中↔英）</option>
+          <option value="zh2en">中文 → English</option>
+          <option value="en2zh">English → 中文</option>
+        </select>
+        <button type="button" class="btn btn-ghost" id="btnTranslate" style="border-color:var(--green);color:var(--green)">🌐 自動翻譯</button>
+        <button type="button" class="btn btn-ghost" id="btnTrad" title="將中文欄位嘅簡體字轉做繁體">🈶 簡 → 繁</button>
+      </div>
+
       <div class="field"><label>分類</label><input type="text" id="f_cat" list="catList" placeholder="例如：家常菜 / 湯 / 甜品"><datalist id="catList"></datalist></div>
       <div class="field">
         <label>相片（上傳電腦張相，或貼網址）</label>
         <input type="file" id="f_photoFile" accept="image/*">
-        <div class="hint">上傳嘅相會變 base64 埋喺 recipes.json 入面（檔會大啲）；或者下面貼個圖片網址都得。</div>
+        <div class="hint">上傳嘅相會自動壓細（最長邊 1000px）再埋入 recipes.json，避免檔案過大令儲存失敗；或者下面貼個圖片網址都得。</div>
         <input type="url" id="f_photoUrl" placeholder="https://… 圖片網址（可留空）" style="margin-top:6px">
         <img id="f_preview" class="preview-img" style="display:none">
       </div>
       <div class="field"><label>影片連結（IG / FB / YouTube 都得）</label><input type="url" id="f_video" placeholder="https://www.instagram.com/reel/…"></div>
       <div class="field"><label>材料（每行一項）</label><textarea id="f_materials" placeholder="唐芹 1 扎&#10;蒜頭 3 粒&#10;鹽 少許"></textarea></div>
       <div class="field"><label>步驟（每行一步，會自動變 1. 2. 3.）</label><textarea id="f_steps" placeholder="唐芹洗淨切段&#10;蒜頭剁蓉起鑊&#10;落芹菜兜炒，加鹽調味"></textarea></div>
-      <div class="field" style="background:#f2f8f4;border:1px dashed var(--green);border-radius:10px;padding:10px 12px">
-        <label>🌐 English（可留空；填咗就可以喺瀏覽時切換 EN 顯示）</label>
+      <div class="field" style="background:#f6fbf8;border:1px dashed var(--green);border-radius:10px;padding:10px 12px">
+        <label>🌐 English（自動翻譯會填呢度；可留空，瀏覽時切 EN 先顯示）</label>
         <input type="text" id="f_dish_en" placeholder="Dish name, e.g. Stir-fried Celery with Garlic">
         <textarea id="f_materials_en" placeholder="Materials (one per line), e.g. 1 bunch celery" style="margin-top:6px"></textarea>
         <textarea id="f_steps_en" placeholder="Steps (one per line)" style="margin-top:6px"></textarea>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">
-          <select id="transDir" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.82rem;background:#fff;color:var(--text)">
-            <option value="zh2en">中文 → English</option>
-            <option value="en2zh">English → 中文</option>
-          </select>
-          <button type="button" class="btn btn-ghost" id="btnTranslate" style="border-color:var(--green);color:var(--green)">🌐 自動翻譯</button>
-          <button type="button" class="btn btn-ghost" id="btnTrad" title="將中文欄位嘅簡體字轉做繁體">🈶 簡 → 繁</button>
-        </div>
-        <div class="hint">
-          用 MyMemory 免費翻譯 API；只有你㩒呢個掣先會呼叫（瀏覽模式唔會觸發任何 API）。<br>
-          <b>中文 → English</b>：用中文欄譯去英文欄；<b>English → 中文</b>：用英文欄譯返中文欄。只會填「空嘅欄」，唔會蓋走你已填嘅內容。
-        </div>
       </div>
       <div class="field" style="background:#faf6ef;border:1px dashed var(--accent);border-radius:10px;padding:10px 12px">
         <label>🪄 智能拆解（貼上影片字幕 / caption / 你抄嘅筆記 → 一鍵拆好材料同步驟）</label>
@@ -217,6 +226,42 @@
         <button type="submit" class="btn btn-green">💾 儲存到雲端</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- 分類管理 彈窗 -->
+<div class="overlay" id="catOverlay">
+  <div class="modal">
+    <h2>🏷 分類管理</h2>
+    <div id="catListBox"></div>
+    <div class="hint">改左邊輸入框＝重新命名（例如改「湯」做「湯水」）；按「刪除」＝變為「未分類」。改完㩒「儲存」即更新全部相關食譜，並同步雲端。</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnCatCancel">取消</button>
+      <button class="btn btn-green" id="btnCatSave">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 匯出 彈窗 -->
+<div class="overlay" id="exportOverlay">
+  <div class="modal">
+    <h2>⬇️ 匯出食譜</h2>
+    <div class="field">
+      <label>匯出範圍</label>
+      <div class="row-inline"><label><input type="radio" name="expScope" value="all" checked> 全部（<span id="expAllN">0</span> 個）</label></div>
+      <div class="row-inline"><label><input type="radio" name="expScope" value="sel"> 只選中（<span id="expSelN">0</span> 個）</label></div>
+    </div>
+    <div class="field">
+      <label>格式</label>
+      <div class="row-inline"><label><input type="radio" name="expFmt" value="json" checked> JSON 備份（可再匯入）</label></div>
+      <div class="row-inline"><label><input type="radio" name="expFmt" value="xls"> Excel (.xlsx)</label></div>
+      <div class="row-inline"><label><input type="radio" name="expFmt" value="pdf"> PDF（彈出列印，揀「另存為 PDF」）</label></div>
+    </div>
+    <div class="hint">JSON 係備份，格式同雲端一樣；Excel / PDF 方便列印或畀人睇（含中英文）。</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnExpCancel">取消</button>
+      <button class="btn btn-green" id="btnExpGo">匯出</button>
+    </div>
   </div>
 </div>
 
@@ -241,6 +286,7 @@ let pendingPhoto = "";
 let dispMode = "zh";          // zh | en | tw | cn —— 只係顯示用，唔改資料
 let convCache = {};           // opencc converter cache
 let openccReady = false;
+let selected = new Set();     // 匯出揀選用
 // 開頁直接用嵌入式預設 token 自動連接。唔會讀 localStorage，避免你試過嘅舊壞 token
 // 殘留喺部機而鎖死連接。順便清走舊 key，確保永遠用返嵌入式好 token。
 try{ localStorage.removeItem("myRecipes.gh_token"); }catch(e){}
@@ -267,27 +313,37 @@ async function loadData(){
   render();
 }
 
-/* ===== GitHub 寫入 ===== */
+/* ===== GitHub 寫入（含 retry，應付 409 衝突 / 5xx / 限流） ===== */
 async function pushToGitHub(){
   if(!token){ toast('請先喺「連接 GitHub」貼入 PAT'); throw new Error('no token'); }
   const api = `https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
-  const head = await fetch(api, {headers:{Authorization:'Bearer '+token}});
-  if(!head.ok) throw new Error('讀取檔案失敗（PAT 無權限或 repo 名錯？）');
-  const meta = await head.json();
-  const body = JSON.stringify({
-    message: "update recipes via app",
-    content: b64encode(JSON.stringify(recipes,null,2)),
-    sha: meta.sha
-  });
-  const put = await fetch(api, {method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body});
-  if(!put.ok){
-    const err = await put.json().catch(()=>({}));
-    throw new Error(err.message || ('寫入失敗 '+put.status));
+  for(let attempt=1; attempt<=3; attempt++){
+    try{
+      const head = await fetch(api, {headers:{Authorization:'Bearer '+token}});
+      if(!head.ok) throw new Error('讀取檔案失敗（PAT 無權限或 repo 名錯？）');
+      const meta = await head.json();
+      const content = b64encode(JSON.stringify(recipes,null,2));
+      if(content.length > 900000){ throw new Error('檔案太大（可能相片太多/太大）。建議減少上傳相片，或用圖片網址。'); }
+      const body = JSON.stringify({
+        message: "update recipes via app",
+        content,
+        sha: meta.sha
+      });
+      const put = await fetch(api, {method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body});
+      if(put.ok) return;
+      const err = await put.json().catch(()=>({}));
+      if(put.status===409){ continue; }                 // sha 衝突 → 重新攞 sha 再試
+      if(put.status>=500 && attempt<3){ continue; }      // 伺服器錯 → 重試
+      throw new Error(err.message || ('寫入失敗 '+put.status));
+    }catch(e){
+      if(attempt>=3) throw e;
+      await new Promise(r=>setTimeout(r,800));            // 輕微等一下再 retry
+    }
   }
 }
 
-/* ===== 渲染（同上版） ===== */
-function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2000);}
+/* ===== 渲染 ===== */
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);}
 function setStatus(kind,text){const s=document.getElementById("connStatus");const dot=kind==='ok'?'dot-ok':kind==='err'?'dot-err':'dot-off';s.innerHTML=`<span class="statusdot ${dot}"></span>${text}`;}
 function esc(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function linesToList(str,ordered){const items=(str||"").split("\n").map(x=>x.trim()).filter(Boolean);if(!items.length)return '<div class="placeholder">（未填寫）</div>';const tag=ordered?"ol":"ul";return "<"+tag+">"+items.map(i=>"<li>"+esc(i)+"</li>").join("")+"</"+tag+">";}
@@ -311,7 +367,7 @@ function render(){
   let list=recipes.filter(r=>{
     if(cat && r.cat!==cat) return false;
     if(!q) return true;
-    return (r.dish+" "+(r.materials||"")+" "+(r.cat||"")+" "+(r.note||"")).toLowerCase().includes(q);
+    return (r.dish+" "+(r.materials||"")+" "+(r.cat||"")+" "+(r.note||"")+" "+(r.dishEn||"")).toLowerCase().includes(q);
   });
   list.sort((a,b)=>(b.created||0)-(a.created||0));
 
@@ -322,10 +378,11 @@ function render(){
   document.getElementById("catList").innerHTML=cats.map(c=>'<option value="'+esc(c)+'">').join("");
 
   const tb=document.getElementById("tbody");
-  if(!list.length){tb.innerHTML='<tr><td colspan="'+(adminMode?6:5)+'"><div class="empty">暫時無食譜。㩒「🔧 管理後台」→「➕ 新增食譜」加第一道菜啦！</div></td></tr>';}
+  if(!list.length){tb.innerHTML='<tr><td colspan="'+(adminMode?7:5)+'"><div class="empty">暫時無食譜。㩒「🔧 管理後台」→「➕ 新增食譜」加第一道菜啦！</div></td></tr>';}
   else{
     tb.innerHTML=list.map((r,i)=>{
-      const actions=adminMode?'<td><div class="actions"><button class="iconbtn" data-edit="'+r.id+'">✏️</button><button class="iconbtn" data-del="'+r.id+'">🗑</button></div></td>':'';
+      const selCell = adminMode ? '<td class="sel-col"><input type="checkbox" class="selbox" data-id="'+r.id+'"'+(selected.has(r.id)?' checked':'')+'></td>' : '';
+      const actions=adminMode?'<td><div class="actions"><button class="iconbtn" data-edit="'+r.id+'">✏️</button><button class="iconbtn" data-trans="'+r.id+'" title="翻譯呢個食譜">🌐</button><button class="iconbtn" data-del="'+r.id+'">🗑</button></div></td>':'';
       const hasEn = r.dishEn || r.materialsEn || r.stepsEn;
       let dishTxt, matsTxt, stepsTxt;
       if(dispMode==="en"){
@@ -343,7 +400,7 @@ function render(){
         }
       }
       const enBadge = (dispMode!=="en" && hasEn) ? '<span class="cat" style="background:#eef6f0;color:var(--green)">🌐 EN</span>' : '';
-      return '<tr>'+
+      return selCell+'<tr>'.replace('<tr>','')+
         '<td class="rowidx">'+(i+1)+'</td>'+
         '<td>'+photoCell(r)+'</td>'+
         '<td><div class="dish">'+esc(dishTxt)+(r.cat?'<span class="cat">'+esc(r.cat)+'</span>':'')+enBadge+'</div>'+
@@ -354,10 +411,21 @@ function render(){
         actions+'</tr>';
     }).join("");
   }
+  // 表頭：後台模式加「選取」欄 + 「操作」欄
   const hr=document.getElementById("headRow");
-  if(adminMode && !hr.querySelector('th.action-col')) hr.insertAdjacentHTML("beforeend",'<th class="action-col" style="width:90px">操作</th>');
-  else if(!adminMode){const a=hr.querySelector('th.action-col');if(a)a.remove();}
-  document.getElementById("count").textContent="共 "+recipes.length+" 個食譜"+(list.length!==recipes.length?"（依篩選顯示 "+list.length+" 個）":"")+(adminMode?" · 後台模式開啟":"");
+  if(adminMode && !hr.querySelector('th.sel-col')){
+    const th=document.createElement("th");th.className="sel-col";th.innerHTML='<input type="checkbox" id="selAll">';
+    hr.insertBefore(th, hr.firstChild);
+    const th2=document.createElement("th");th2.className="action-col";th2.style.width="110px";th2.textContent="操作";
+    hr.appendChild(th2);
+  }else if(!adminMode){
+    const a=hr.querySelector('th.sel-col');if(a)a.remove();
+    const b=hr.querySelector('th.action-col');if(b)b.remove();
+  }
+  document.getElementById("count").textContent="共 "+recipes.length+" 個食譜"+(list.length!==recipes.length?"（依篩選顯示 "+list.length+" 個）":"")+(adminMode?" · 後台模式開啟":"")+(selected.size?" · 已選 "+selected.size+" 個":"");
+  // 同步匯出數量
+  const ea=document.getElementById("expAllN"); if(ea) ea.textContent=recipes.length;
+  const es=document.getElementById("expSelN"); if(es) es.textContent=selected.size;
 }
 
 /* ===== 後台開關 ===== */
@@ -367,9 +435,18 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
     document.getElementById("btnAdmin").classList.add("on");
     document.getElementById("btnAdmin").textContent="🔧 後台開啟";
     document.getElementById("settings").classList.add("show");
+    const tb=document.querySelector(".toolbar");
     if(!document.getElementById("btnAdd")){
       const b=document.createElement("button");b.id="btnAdd";b.className="btn btn-green";b.textContent="➕ 新增食譜";
-      b.addEventListener("click",()=>openModal());document.querySelector(".toolbar").appendChild(b);
+      b.addEventListener("click",()=>openModal());tb.appendChild(b);
+    }
+    if(!document.getElementById("btnCat")){
+      const c=document.createElement("button");c.id="btnCat";c.className="btn btn-ghost";c.textContent="🏷 分類";
+      c.addEventListener("click",openCatModal);tb.appendChild(c);
+    }
+    if(!document.getElementById("btnTransAll")){
+      const t=document.createElement("button");t.id="btnTransAll";t.className="btn btn-ghost";t.style.borderColor="var(--green)";t.style.color="var(--green)";
+      t.textContent="🌐 翻譯全部";t.addEventListener("click",translateAll);tb.appendChild(t);
     }
     render();
   }else{
@@ -377,7 +454,7 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
     document.getElementById("btnAdmin").classList.remove("on");
     document.getElementById("btnAdmin").textContent="🔧 管理後台";
     document.getElementById("settings").classList.remove("show");
-    const b=document.getElementById("btnAdd");if(b)b.remove();
+    ["btnAdd","btnCat","btnTransAll"].forEach(id=>{const b=document.getElementById(id);if(b)b.remove();});
     render();
   }
 });
@@ -395,10 +472,9 @@ async function connectWith(v, silent){
     setStatus('ok','已連接 ✅ 可以雲端同步');
     if(!silent) toast("已連接 GitHub ✅");
     showConnOk();
-    await loadData(); // 重新載入最新雲端資料
+    await loadData();
   }catch(e){
     if(silent){
-      // 自動連接極少見會失敗（嵌入式 token 應該永遠有效）；失敗就保持只讀，唔彈 token 框驚親用家
       setStatus('off','只讀模式（自動連接暫時失敗，可稍後重整網頁）');
     } else {
       token=EMBEDDED_TOKEN;
@@ -424,8 +500,28 @@ document.getElementById("btnHideToken").addEventListener("click",showConnOk);
 
 /* ===== 新增 / 編輯 ===== */
 const overlay=document.getElementById("overlay");
+async function fileToResizedDataURL(file, maxDim=1000, quality=0.82){
+  return new Promise((res,rej)=>{
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){const r=Math.min(maxDim/w,maxDim/h);w=Math.round(w*r);h=Math.round(h*r);}
+        const c=document.createElement("canvas");c.width=w;c.height=h;
+        c.getContext("2d").drawImage(img,0,0,w,h);
+        try{ res(c.toDataURL("image/jpeg",quality)); }
+        catch(e){ res(rd.result); } // 萬一 canvas 出事，退回原圖
+      };
+      img.onerror=()=>rej(new Error("相片讀取失敗"));
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
 function openModal(id){
   pendingPhoto="";document.getElementById("f_preview").style.display="none";document.getElementById("recipeForm").reset();
+  document.getElementById("transDir").value="auto";
   if(id){
     const r=recipes.find(x=>x.id===id);if(!r)return;
     document.getElementById("modalTitle").textContent="✏️ 編輯食譜";
@@ -451,10 +547,11 @@ function openModal(id){
 function closeModal(){overlay.classList.remove("show");}
 document.getElementById("btnCancel").addEventListener("click",closeModal);
 overlay.addEventListener("click",e=>{if(e.target===overlay)closeModal();});
-document.getElementById("f_photoFile").addEventListener("change",function(){
-  const f=this.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{pendingPhoto=rd.result;const p=document.getElementById("f_preview");p.src=pendingPhoto;p.style.display="block";};
-  rd.readAsDataURL(f);
+document.getElementById("f_photoFile").addEventListener("change",async function(){
+  const f=this.files[0];if(!f)return;
+  const p=document.getElementById("f_preview");p.style.display="block";p.textContent="處理中…";
+  try{ pendingPhoto=await fileToResizedDataURL(f); p.src=pendingPhoto; }
+  catch(e){ toast("相片處理失敗，請換過或貼網址"); pendingPhoto=""; p.style.display="none"; }
 });
 document.getElementById("f_photoUrl").addEventListener("input",function(){
   const u=this.value.trim();if(u){pendingPhoto=u;const p=document.getElementById("f_preview");p.src=u;p.style.display="block";}
@@ -475,15 +572,15 @@ document.getElementById("recipeForm").addEventListener("submit",async function(e
     stepsEn:document.getElementById("f_steps_en").value.trim(),
     note:document.getElementById("f_note").value.trim()
   };
-  if(id){const r=recipes.find(x=>x.id===id);Object.assign(r,data);toast("更新中…");}
-  else{recipes.push({id:uid(),created:Date.now(),...data});toast("新增中…");}
-  try{
-    save(); // 先更新本地顯示
-    await pushToGitHub();
-    localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
-    toast("已儲存到雲端 ✅");
-  }catch(err){ toast("雲端儲存失敗："+(err.message||err)); }
+  if(!data.dish){ toast("請填寫菜名"); return; }
+  if(id){const r=recipes.find(x=>x.id===id);Object.assign(r,data);}
+  else{recipes.push({id:uid(),created:Date.now(),...data});}
+  localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));  // 本地先留底，雲端失敗都唔會唔見
   closeModal(); render();
+  try{
+    await pushToGitHub();
+    toast("已儲存到雲端 ✅");
+  }catch(err){ toast("雲端儲存失敗："+(err.message||err)+"（本地已暫存，可稍後再試）"); }
 });
 // 本地即時更新（樂觀），之後再由 push 覆寫
 function save(){ /* placeholder：實際寫入在 submit 內 */ }
@@ -528,25 +625,170 @@ document.getElementById("btnParse").addEventListener("click",()=>{
   toast("🪄 已拆解填寫 ✓ 請檢查無誤再儲存");
 });
 
+/* ===== 表格事件：編輯 / 刪除 / 翻譯一條 / 選取 ===== */
 document.getElementById("tbody").addEventListener("click",function(e){
-  const ed=e.target.closest("[data-edit]");const dl=e.target.closest("[data-del]");
+  const ed=e.target.closest("[data-edit]");const dl=e.target.closest("[data-del]");const tr=e.target.closest("[data-trans]");
   if(ed)openModal(ed.getAttribute("data-edit"));
+  if(tr){
+    openModal(tr.getAttribute("data-trans"));
+    setTimeout(()=>{const b=document.getElementById("btnTranslate");if(b)b.click();},120);
+    return;
+  }
   if(dl){
     const id=dl.getAttribute("data-del");const r=recipes.find(x=>x.id===id);
     if(!confirm("確定刪除「"+(r.dish||"此食譜")+"」？"))return;
     if(!token){alert("請先連接 GitHub 先可以刪除（要寫入雲端）。");return;}
-    recipes=recipes.filter(x=>x.id!==id);render();
+    recipes=recipes.filter(x=>x.id!==id);selected.delete(id);render();localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
     pushToGitHub().then(()=>toast("已刪除 🗑")).catch(err=>toast("刪除失敗："+(err.message||err)));
   }
 });
-
-/* ===== 匯出備份 ===== */
-document.getElementById("btnExport").addEventListener("click",()=>{
-  const blob=new Blob([JSON.stringify(recipes,null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="我的食譜備份_"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(a.href);
-  toast("已匯出備份 ⬇️");
+document.getElementById("tbody").addEventListener("change",function(e){
+  if(e.target.classList.contains("selbox")){
+    const id=e.target.getAttribute("data-id");
+    if(e.target.checked) selected.add(id); else selected.delete(id);
+    render();
+  }
 });
+document.getElementById("headRow").addEventListener("change",function(e){
+  if(e.target.id==="selAll"){
+    const all=e.target.checked;
+    document.querySelectorAll(".selbox").forEach(c=>{c.checked=all;const id=c.getAttribute("data-id");if(all)selected.add(id);else selected.delete(id);});
+    render();
+  }
+});
+
+/* ===== 🏷 分類管理 ===== */
+function openCatModal(){
+  const cats=[...new Set(recipes.map(r=>r.cat).filter(Boolean))].sort();
+  const box=document.getElementById("catListBox");
+  if(!cats.length){ box.innerHTML='<div class="placeholder">暫時無分類。新增食譜時填「分類」就會自動出現。</div>'; }
+  else{
+    box.innerHTML=cats.map((c,i)=>{
+      const n=recipes.filter(r=>r.cat===c).length;
+      return '<div class="catmgr-row" data-old="'+esc(c)+'">'+
+        '<input type="text" value="'+esc(c)+'" data-new="'+i+'">'+
+        '<span class="cnt">'+n+' 個</span>'+
+        '<button type="button" class="delbtn" data-delcat="'+i+'">刪除</button>'+
+        '</div>';
+    }).join("");
+  }
+  document.getElementById("catOverlay").classList.add("show");
+}
+document.getElementById("btnCatCancel").addEventListener("click",()=>document.getElementById("catOverlay").classList.remove("show"));
+document.getElementById("catListBox").addEventListener("click",function(e){
+  if(e.target.hasAttribute("data-delcat")){
+    const row=e.target.closest(".catmgr-row");
+    const inp=row.querySelector("input");
+    inp.value="";  // 清空＝刪除（儲存時變未分類）
+    toast("已標記刪除，㩒「儲存」生效");
+  }
+});
+document.getElementById("btnCatSave").addEventListener("click",async()=>{
+  if(!token){alert("請先連接 GitHub 先可以儲存分類改名。");return;}
+  const rows=[...document.querySelectorAll("#catListBox .catmgr-row")];
+  const map={}; // old -> new
+  rows.forEach(r=>{
+    const old=r.getAttribute("data-old");
+    const nv=r.querySelector("input").value.trim();
+    map[old]= nv||"";  // 空＝刪除
+  });
+  let changed=0;
+  recipes.forEach(r=>{
+    if(r.cat && map.hasOwnProperty(r.cat)){
+      const nn=map[r.cat];
+      if(nn!==r.cat){ r.cat=nn; changed++; }
+    }
+  });
+  document.getElementById("catOverlay").classList.remove("show");
+  localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
+  render();
+  if(changed){
+    toast("分類已更新，儲存中…");
+    try{ await pushToGitHub(); toast("分類改名已同步雲端 ✅（"+changed+" 個食譜）"); }
+    catch(err){ toast("雲端儲存失敗："+(err.message||err)+"（本地已更新）"); }
+  }else{ toast("分類無改動"); }
+});
+
+/* ===== 匯出 ===== */
+document.getElementById("btnExport").addEventListener("click",()=>{
+  document.getElementById("expAllN").textContent=recipes.length;
+  document.getElementById("expSelN").textContent=selected.size;
+  if(selected.size===0){ const s=document.querySelector('input[name=expScope][value=sel]'); if(s) s.disabled=true; }
+  else { const s=document.querySelector('input[name=expScope][value=sel]'); if(s) s.disabled=false; }
+  document.getElementById("exportOverlay").classList.add("show");
+});
+document.getElementById("btnExpCancel").addEventListener("click",()=>document.getElementById("exportOverlay").classList.remove("show"));
+document.getElementById("exportOverlay").addEventListener("click",e=>{if(e.target===document.getElementById("exportOverlay"))document.getElementById("exportOverlay").classList.remove("show");});
+function getExportRows(){
+  const scope=document.querySelector('input[name=expScope]:checked').value;
+  let rows = scope==="sel" ? recipes.filter(r=>selected.has(r.id)) : recipes.slice();
+  if(scope==="sel" && rows.length===0){ rows=recipes.slice(); toast("無選中，改為匯出全部"); }
+  return rows;
+}
+document.getElementById("btnExpGo").addEventListener("click",async()=>{
+  const fmt=document.querySelector('input[name=expFmt]:checked').value;
+  const rows=getExportRows();
+  document.getElementById("exportOverlay").classList.remove("show");
+  if(fmt==="json"){
+    const blob=new Blob([JSON.stringify(rows,null,2)],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download="我的食譜_"+(scopeLabel())+"_"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(a.href);
+    toast("已匯出 JSON ⬇️");
+  }else if(fmt==="xls"){
+    toast("載入 Excel 函式庫…");
+    try{ await loadScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"); exportXLS(rows); }
+    catch(e){ toast("Excel 匯出失敗："+(e.message||e)); }
+  }else if(fmt==="pdf"){
+    exportPDF(rows);
+  }
+});
+function scopeLabel(){const s=document.querySelector('input[name=expScope]:checked').value;return s==="sel"?"選中":"全部";}
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector('script[src="'+src+'"]'))return res();const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=()=>rej(new Error("載入程式庫失敗，請檢查網絡"));document.head.appendChild(s);});}
+function exportXLS(rows){
+  const data=rows.map(r=>({
+    "菜名":r.dish||"", "分類":r.cat||"",
+    "材料":(r.materials||"").split("\n").filter(Boolean).join(" | "),
+    "步驟":(r.steps||"").split("\n").filter(Boolean).join(" | "),
+    "英文菜名":r.dishEn||"",
+    "英文材料":(r.materialsEn||"").split("\n").filter(Boolean).join(" | "),
+    "英文步驟":(r.stepsEn||"").split("\n").filter(Boolean).join(" | "),
+    "影片連結":r.video||"", "備註":r.note||""
+  }));
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"食譜");
+  XLSX.writeFile(wb,"我的食譜_"+(scopeLabel())+"_"+new Date().toISOString().slice(0,10)+".xlsx");
+  toast("已匯出 Excel ⬇️");
+}
+function exportPDF(rows){
+  const w=window.open("","_blank");
+  if(!w){ toast("瀏覽器擋咗彈出視窗，請允許 pop-up 再試"); return; }
+  let html='<html><head><meta charset="utf-8"><title>我的食譜</title><style>'
+    +'body{font-family:"PingFang HK","Microsoft YaHei",sans-serif;color:#3a2e26;padding:24px}'
+    +'h1{color:#c0392b;font-size:1.4rem} .r{border:1px solid #f0e3d3;border-radius:10px;padding:12px 14px;margin-bottom:14px;page-break-inside:avoid}'
+    +'.dish{font-weight:700;color:#c0392b;font-size:1.1rem} .cat{color:#e8743b;font-size:.85rem;margin-left:6px}'
+    +'h4{margin:10px 0 3px;color:#2e8b57;font-size:.95rem} ul,ol{margin:0 0 0 1.2em;padding:0} li{margin:3px 0} .en{color:#2e8b57;font-size:.9rem;margin-top:8px;border-top:1px dashed #cfe8da;padding-top:6px}'
+    +'@media print{body{padding:0}}'
+    +'</style></head><body><h1>🍳 我的食譜（'+rows.length+' 個）</h1>';
+  for(const r of rows){
+    html+='<div class="r"><div class="dish">'+esc(r.dish||"(未命名)")+(r.cat?' <span class="cat">'+esc(r.cat)+'</span>':'')+'</div>';
+    if(r.materials)html+='<h4>材料</h4>'+linesToList(r.materials,false);
+    if(r.steps)html+='<h4>步驟</h4>'+linesToList(r.steps,true);
+    if(r.dishEn||r.materialsEn||r.stepsEn){
+      html+='<div class="en">';
+      if(r.dishEn)html+='<b>'+esc(r.dishEn)+'</b><br>';
+      if(r.materialsEn)html+='<h4>Materials</h4>'+linesToList(r.materialsEn,false);
+      if(r.stepsEn)html+='<h4>Steps</h4>'+linesToList(r.stepsEn,true);
+      html+='</div>';
+    }
+    if(r.video)html+='<p style="font-size:.8rem;color:#9b8676">影片：'+esc(r.video)+'</p>';
+    if(r.note)html+='<p style="font-size:.8rem;color:#9b8676">📝 '+esc(r.note)+'</p>';
+    html+='</div>';
+  }
+  html+='</body></html>';
+  w.document.open();w.document.write(html);w.document.close();w.focus();
+  setTimeout(()=>w.print(),500);
+  toast("已開啟 PDF 列印視窗，揀「另存為 PDF」⬇️");
+}
 
 /* ===== 搜尋 ===== */
 document.getElementById("search").addEventListener("input",render);
@@ -566,7 +808,8 @@ document.getElementById("dispMode").addEventListener("change",async()=>{
   render();
 });
 
-/* ===== 🌐 自動翻譯（MyMemory 免費 API，只喺㩒掣時呼叫；支援雙向） ===== */
+/* ===== 🌐 自動翻譯（智能辨別中/英方向；MyMemory 免費 API，只喺㩒掣時呼叫） ===== */
+function hasCJK(s){ return /[一-龥]/.test(s||""); }
 async function mmTranslate(text, langpair){
   const url="https://api.mymemory.translated.net/get?q="+encodeURIComponent(text)+"&langpair="+encodeURIComponent(langpair);
   const res=await fetch(url);
@@ -578,29 +821,62 @@ async function mmTranslate(text, langpair){
 }
 document.getElementById("btnTranslate").addEventListener("click",async()=>{
   const btn=document.getElementById("btnTranslate");
-  const dir=document.getElementById("transDir").value; // zh2en | en2zh
-  const pair = dir==="en2zh" ? "en|zh-TW" : "zh-TW|en";
-  // [來源欄, 目標欄]
-  const fields = dir==="en2zh"
-    ? [["f_dish_en","f_dish"],["f_materials_en","f_materials"],["f_steps_en","f_steps"]]
-    : [["f_dish","f_dish_en"],["f_materials","f_materials_en"],["f_steps","f_steps_en"]];
+  const dir=document.getElementById("transDir").value; // auto|zh2en|en2zh
   btn.disabled=true; btn.textContent="🌐 翻譯中…";
-  let done=0, skipped=0;
+  let done=0, fail=0;
+  const pairs=[["f_dish","f_dish_en"],["f_materials","f_materials_en"],["f_steps","f_steps_en"]];
   try{
-    for(const [srcId,dstId] of fields){
-      const src=document.getElementById(srcId).value.trim();
-      const dstEl=document.getElementById(dstId);
-      if(!src || dstEl.value.trim()){ skipped++; continue; }   // 空來源 / 目標已有內容 → 跳過
+    for(const [zId,eId] of pairs){
+      const zEl=document.getElementById(zId), eEl=document.getElementById(eId);
+      const zv=zEl.value.trim(), ev=eEl.value.trim();
+      if(!zv && !ev) continue;
+      let srcEl, dstEl, pair;
+      if(dir==="en2zh"){ srcEl=eEl; dstEl=zEl; pair="en|zh-TW"; }
+      else if(dir==="zh2en"){ srcEl=zEl; dstEl=eEl; pair="zh-TW|en"; }
+      else { // auto：譯「有嘅一方」去「空嘅一方」，自動辨別中/英
+        if(zv && !ev){ srcEl=zEl; dstEl=eEl; pair="zh-TW|en"; }
+        else if(ev && !zv){ srcEl=eEl; dstEl=zEl; pair="en|zh-TW"; }
+        else continue; // 兩邊都空或都填咗 → 跳過
+      }
+      const src=srcEl.value.trim(); if(!src) continue;
       const lines=src.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
       const out=[];
-      for(const l of lines) out.push(await mmTranslate(l, pair));
+      for(const l of lines){ try{ out.push(await mmTranslate(l,pair)); }catch(e){ out.push(l); fail++; } }
       dstEl.value=out.join("\n");
       done++;
     }
-    toast(done ? "🌐 已翻譯 "+done+" 欄 ✓ 請檢查 執靚先儲存" : "冇嘢可譯（來源空白，或目標欄已有內容）");
+    toast(done? ("🌐 已翻譯 "+done+" 欄 ✓ 檢查無誤先儲存"+(fail?"（"+fail+" 行失敗，已保留原文）":"")) : "冇嘢可譯（兩邊都空，或都已填好）");
   }catch(e){ toast("翻譯失敗："+(e.message||e)); }
   btn.disabled=false; btn.textContent="🌐 自動翻譯";
 });
+
+/* 翻譯全部（後台頂部掣）：逐個食譜填滿另一語言，再一次過存雲端 */
+async function translateAll(){
+  if(!recipes.length){ toast("無食譜可譯"); return; }
+  if(!token){ alert("請先連接 GitHub 先可以儲存。"); return; }
+  if(!confirm("會為全部 "+recipes.length+" 個食譜做中英互譯（自動辨別方向、填滿另一語言），然後一次過存去雲端。確定？")) return;
+  let changed=0, fails=0;
+  const pairs=[["dish","dishEn"],["materials","materialsEn"],["steps","stepsEn"]];
+  for(const r of recipes){
+    let c=0;
+    for(const [z,e] of pairs){
+      const zv=(r[z]||"").trim(), ev=(r[e]||"").trim();
+      let src, dst, pair;
+      if(zv && !ev){ src=zv; dst=e; pair="zh-TW|en"; }
+      else if(ev && !zv){ src=ev; dst=z; pair="en|zh-TW"; }
+      else continue;
+      const lines=src.split(/\n/).map(x=>x.trim()).filter(Boolean);
+      const out=[];
+      for(const l of lines){ try{ out.push(await mmTranslate(l,pair)); }catch(err){ out.push(l); fails++; } }
+      r[dst]=out.join("\n"); c++;
+    }
+    if(c) changed++;
+  }
+  localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
+  render();
+  try{ await pushToGitHub(); toast("已翻譯並儲存 "+changed+" 個食譜 ✅"+(fails?"（"+fails+" 行失敗，已保留原文）":"")); }
+  catch(err){ toast("雲端儲存失敗："+(err.message||err)+"（本地已更新）"); }
+}
 
 /* ===== 🈶 簡繁轉換（opencc-js，lazy load，只喺需要時下載） ===== */
 async function ensureConv(){
@@ -630,15 +906,15 @@ document.getElementById("btnTrad").addEventListener("click",async()=>{
       const out=convTo(el.value,"tw");
       if(out!==el.value){ el.value=out; n++; }
     }
-    toast(n? "🈶 已轉做繁體（"+n+" 欄，已寫入雲端）" : "已經係繁體，冇需轉換");
+    toast(n? "🈶 已轉做繁體（"+n+" 欄，儲存時寫入雲端）" : "已經係繁體，冇需轉換");
   }catch(e){ toast("簡繁轉換失敗："+(e.message||e)); }
   btn.disabled=false; btn.textContent="🈶 簡 → 繁";
 });
 
 /* 啟動：永遠用預設 token 自動連接，唔使每次貼 PAT */
-showConnOk();            // 預設收埋 token 輸入框，只顯示「已自動連接」
-loadData();              // 先顯示雲端資料（同時試連）
-connectWith(token, true); // 靜默自動連接，唔使每次貼 PAT
+showConnOk();
+loadData();
+connectWith(token, true);
 </script>
 </body>
 </html>
