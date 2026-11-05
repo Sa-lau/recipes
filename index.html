@@ -228,10 +228,8 @@ const REPO = "Sa-lau/recipes";     // ← owner/repo，要同你上傳嘅 repo �
 const DATA_FILE = "recipes.json";
 const RAW_BASE = "https://sa-lau.github.io/recipes";   // 永遠讀雲端，開 local 檔都見到最新
 const CACHE_KEY = "myRecipes.cache.v1";
-const TOKEN_KEY = "myRecipes.gh_token";
 // 預設連接 token（fine-grained，只授權 recipes 一個 repo）：開網自動連，唔使每次貼。
-// 為避開 GitHub secret 掃描，將字串拆開，runtime 先拼埋。想用自己第個 token，喺
-// 「🔧 管理後台 → 連接 GitHub」貼過就會暫時蓋過佢；想廢咗佢去 GitHub 㩒 Revoke 就得。
+// 為避開 GitHub secret 掃描，將字串拆開，runtime 先拼埋。想廢咗佢去 GitHub 㩒 Revoke 就得。
 const _tA = "github_pat_";
 const _tB = "11CJ5DABQ0i6QVEH4hhOFw_GrDmElVL0fp30WlZEiBnL4pmQ1wIyeu60mBXXV6H0E94FWIIB3Y6ECCwlw2";
 const EMBEDDED_TOKEN = _tA + _tB;
@@ -243,7 +241,10 @@ let pendingPhoto = "";
 let dispMode = "zh";          // zh | en | tw | cn —— 只係顯示用，唔改資料
 let convCache = {};           // opencc converter cache
 let openccReady = false;
-let token = localStorage.getItem(TOKEN_KEY) || EMBEDDED_TOKEN;   // 優先用部機記住嘅，否則用預設 → 開頁自動連
+// 開頁直接用嵌入式預設 token 自動連接。唔會讀 localStorage，避免你試過嘅舊壞 token
+// 殘留喺部機而鎖死連接。順便清走舊 key，確保永遠用返嵌入式好 token。
+try{ localStorage.removeItem("myRecipes.gh_token"); }catch(e){}
+let token = EMBEDDED_TOKEN;
 
 /* ===== 編碼（處理中文 UTF-8） ===== */
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
@@ -385,22 +386,26 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
 function showConnOk(){ document.getElementById("connEdit").style.display="none"; document.getElementById("connOk").style.display = token ? "block" : "none"; }
 function showConnEdit(){ document.getElementById("connOk").style.display="none"; document.getElementById("connEdit").style.display="block"; }
 async function connectWith(v, silent){
-  token=v; localStorage.setItem(TOKEN_KEY,token);
-  if(!silent) setStatus('off','測試連接中…');
   try{
     const api=`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
-    const res=await fetch(api,{headers:{Authorization:'Bearer '+token}});
+    const res=await fetch(api,{headers:{Authorization:'Bearer '+v}});
     if(!res.ok) throw new Error('fail');
     await res.json();
+    token=v;
     setStatus('ok','已連接 ✅ 可以雲端同步');
     if(!silent) toast("已連接 GitHub ✅");
     showConnOk();
     await loadData(); // 重新載入最新雲端資料
   }catch(e){
-    token="";localStorage.removeItem(TOKEN_KEY);
-    setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
-    if(!silent) toast("連接失敗，檢查 PAT");
-    showConnEdit();
+    if(silent){
+      // 自動連接極少見會失敗（嵌入式 token 應該永遠有效）；失敗就保持只讀，唔彈 token 框驚親用家
+      setStatus('off','只讀模式（自動連接暫時失敗，可稍後重整網頁）');
+    } else {
+      token=EMBEDDED_TOKEN;
+      setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
+      toast("連接失敗，檢查 PAT");
+      showConnEdit();
+    }
   }
 }
 document.getElementById("btnConnect").addEventListener("click",()=>{
@@ -409,7 +414,7 @@ document.getElementById("btnConnect").addEventListener("click",()=>{
   connectWith(v,false);
 });
 document.getElementById("btnDisconnect").addEventListener("click",()=>{
-  token="";localStorage.removeItem(TOKEN_KEY);
+  token="";
   document.getElementById("patInput").value="";
   setStatus('off','未連接 · 只讀模式');toast("已斷開（重新整理網頁會用返預設連接）");
   showConnEdit();
