@@ -178,6 +178,7 @@
             <option value="en2zh">English → 中文</option>
           </select>
           <button type="button" class="btn btn-ghost" id="btnTranslate" style="border-color:var(--green);color:var(--green)">🌐 自動翻譯</button>
+          <button type="button" class="btn btn-ghost" id="btnTrad" title="將中文欄位嘅簡體字轉做繁體">🈶 簡 → 繁</button>
         </div>
         <div class="hint">
           用 MyMemory 免費翻譯 API；只有你㩒呢個掣先會呼叫（瀏覽模式唔會觸發任何 API）。<br>
@@ -533,6 +534,39 @@ document.getElementById("btnTranslate").addEventListener("click",async()=>{
     toast(done ? "🌐 已翻譯 "+done+" 欄 ✓ 請檢查 執靚先儲存" : "冇嘢可譯（來源空白，或目標欄已有內容）");
   }catch(e){ toast("翻譯失敗："+(e.message||e)); }
   btn.disabled=false; btn.textContent="🌐 自動翻譯";
+});
+
+/* ===== 🈶 簡 → 繁（lazy load opencc-js，只喺㩒掣時下載） ===== */
+let _opencc = null;
+async function getOpenCC(){
+  if(_opencc) return _opencc;
+  if(!window.OpenCC){
+    await new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js";
+      s.onload=res;
+      s.onerror=()=>rej(new Error("載入簡繁轉換庫失敗，請檢查網絡"));
+      document.head.appendChild(s);
+    });
+  }
+  _opencc = window.OpenCC.Converter({from:"cn", to:"tw"});
+  return _opencc;
+}
+document.getElementById("btnTrad").addEventListener("click",async()=>{
+  const btn=document.getElementById("btnTrad");
+  btn.disabled=true; btn.textContent="轉換中…";
+  try{
+    const conv=await getOpenCC();
+    let n=0;
+    for(const id of ["f_dish","f_materials","f_steps"]){
+      const el=document.getElementById(id);
+      if(!el.value.trim()) continue;
+      const out=conv(el.value);
+      if(out!==el.value){ el.value=out; n++; }
+    }
+    toast(n? "🈶 已轉做繁體（"+n+" 欄）" : "已經係繁體，冇需轉換");
+  }catch(e){ toast("簡繁轉換失敗："+(e.message||e)); }
+  btn.disabled=false; btn.textContent="🈶 簡 → 繁";
 });
 
 /* 啟動 */
