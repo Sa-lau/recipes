@@ -299,48 +299,54 @@ let sheetApi = (()=>{ try{ return localStorage.getItem(SHEET_KEY) || SHEET_API; 
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
 function b64decode(b64){ return decodeURIComponent(escape(atob(b64))); }
 
-/* ===== 載入：優先 Google 雲端 → 失敗自動由舊 GitHub 匯入一次 → 再唔掂用 cache ===== */
+/* ===== 載入：優先 Google 雲端 → 雲端空/失敗自動由舊 GitHub 匯入一次 → 再唔掂用 cache ===== */
 async function loadData(){
+  let sheetsEmpty = false;
   // 1) 試 Google 雲端（Apps Script）
-  try{
-    if(sheetApi){
+  if(sheetApi){
+    try{
       const res = await fetch(`${sheetApi}?t=${Date.now()}`, {cache:'no-store'});
       if(!res.ok) throw new Error('net '+res.status);
       const j = await res.json();
       if(!j.ok) throw new Error(j.error || '後台回傳錯誤');
       const arr = Array.isArray(j.data) ? j.data : [];
-      recipes = arr;
-      try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(e){}
-      setLoadStatus(true, recipes.length, 'cloud');
-      setStatus('ok','✅ 已連接 Google 雲端（可讀寫）');
-      render();
-      return;
-    }
-    throw new Error('未設定雲端網址');
-  }catch(e){
-    console.error('loadData(Sheets) error:', e);
-    setStatus('off','● 未連到 Google 雲端：'+(e&&e.message?e.message:e)+'（睇 cache 正常）');
-    // 2) 自動由舊 GitHub 匯入一次（公開讀取，唔使 token）
-    try{
-      const r2 = await fetch(`${GH_FALLBACK}?v=${Date.now()}`, {cache:'no-store'});
-      if(r2.ok){
-        const arr = await r2.json();
-        if(Array.isArray(arr) && arr.length){
-          recipes = arr;
-          try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(_){}
-          setLoadStatus(true, recipes.length, 'cache');
-          if(sheetApi){ try{ await pushToSheet(); toast('已從舊 GitHub 自動匯入 '+arr.length+' 個食譜去 Google 雲端 ✅'); }catch(_){} }
-          else { toast('已從舊 GitHub 載入 '+arr.length+' 個食譜（請填雲端網址以儲存）'); }
-          render();
-          return;
-        }
+      if(arr.length>0){
+        recipes = arr;
+        try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(e){}
+        setLoadStatus(true, recipes.length, 'cloud');
+        setStatus('ok','✅ 已連接 Google 雲端（可讀寫）');
+        render();
+        return;
       }
-    }catch(_){}
-    // 3) 最後用 cache
-    const c = (()=>{ try{ return localStorage.getItem(CACHE_KEY); }catch(e){ return null; } })();
-    if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache'); }catch(e2){ recipes=[]; setLoadStatus(false,0,''); } }
-    else { recipes = []; setLoadStatus(false, 0, ''); }
+      sheetsEmpty = true; // 雲端成功但係空 → 等陣由 GitHub 匯入
+    }catch(e){
+      console.error('loadData(Sheets) error:', e);
+      setStatus('off','● 未連到 Google 雲端：'+(e&&e.message?e.message:e)+'（轉用備份）');
+    }
+  } else {
+    setStatus('off','● 未設定雲端網址（請填「🌐 雲端網址」）');
   }
+  // 2) 雲端空 / 失敗 → 由舊 GitHub 匯入一次（公開讀取，唔使 token）
+  try{
+    const r2 = await fetch(`${GH_FALLBACK}?v=${Date.now()}`, {cache:'no-store'});
+    if(r2.ok){
+      const arr = await r2.json();
+      if(Array.isArray(arr) && arr.length){
+        recipes = arr;
+        try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(_){}
+        setLoadStatus(true, recipes.length, 'cache');
+        if(sheetApi && sheetsEmpty){ try{ await pushToSheet(); toast('已從舊 GitHub 自動匯入 '+arr.length+' 個食譜去 Google 雲端 ✅'); }catch(_){} }
+        else if(!sheetApi){ toast('已從舊 GitHub 載入 '+arr.length+' 個食譜（請填雲端網址以儲存）'); }
+        else { toast('已從舊 GitHub 載入 '+arr.length+' 個食譜（雲端暫時連唔到）'); }
+        render();
+        return;
+      }
+    }
+  }catch(_){}
+  // 3) 最後用 cache
+  const c = (()=>{ try{ return localStorage.getItem(CACHE_KEY); }catch(e){ return null; } })();
+  if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache'); }catch(e2){ recipes=[]; setLoadStatus(false,0,''); } }
+  else { recipes = []; setLoadStatus(false, 0, ''); }
   render();
 }
 
