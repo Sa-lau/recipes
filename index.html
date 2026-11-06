@@ -110,9 +110,9 @@
 </header>
 
 <div class="banner" id="banner">
-  ✅ <b>已經自動連接 GitHub 喇</b>：開網即自動連雲端，唔使貼 token，部機手機都直接加 / 改 / 刪食譜。<br>
+  ✅ <b>已經自動連接 Google 雲端喇</b>：開網即自動連雲端，唔使記、唔使填任何嘢，部機手機都直接加 / 改 / 刪食譜。<br>
   後台可以做：➕ 新增、✏️ 編輯、🗑 刪除、🏷 改分類名、🌐 翻譯（中↔英）、⬇️ 匯出 Excel / PDF。<br>
-  「🔧 管理後台」入面嘅「連接 GitHub」係備用：你想用自己第個 token 先需要填。📖 睇食譜唔使登入。
+  資料存去你 Google Drive 嘅一個 JSON 檔（經 Google Sheets Apps Script），穩陣過 GitHub。📖 睇食譜唔使登入。
 </div>
 
 <div class="toolbar">
@@ -131,15 +131,15 @@
 </div>
 
 <div class="settings" id="settings">
-  <h3>🔐 連接狀態（雲端同步）</h3>
+  <h3>🌐 連接狀態（Google 雲端）</h3>
   <div id="loadStatus" style="font-size:.82rem;font-weight:700;margin-bottom:6px;color:var(--muted)">🔄 載入食譜中…</div>
   <div id="connOk" class="conn-ok" style="display:none">
-    ✅ <b>可寫入雲端</b> — 預載 token 已連接，可直接加 / 改 / 刪食譜，<b>唔使記、唔使填任何嘢</b>。
-    <button type="button" class="linkbtn2" id="btnShowToken">🔑 更換 / 用其他 token</button>
+    ✅ <b>已連接 Google 雲端</b> — 可直接加 / 改 / 刪食譜，<b>唔使記、唔使填任何嘢</b>。
+    <button type="button" class="linkbtn2" id="btnShowToken">🌐 更換 / 填雲端網址</button>
   </div>
   <div id="connEdit" class="conn-edit" style="display:none">
     <div class="row">
-      <input type="password" id="patInput" placeholder="貼入你的 GitHub PAT（fine-grained，只授權 recipes repo）" autocomplete="off">
+      <input type="url" id="sheetUrlInput" placeholder="貼入 Google Apps Script Web App 網址（部署後取得）" autocomplete="off">
       <button class="btn btn-green" id="btnConnect">連接</button>
       <button class="btn btn-ghost" id="btnDisconnect">斷開（只讀）</button>
     </div>
@@ -147,17 +147,17 @@
       <button type="button" class="linkbtn2" id="btnHideToken">收起 ▲</button>
     </div>
     <div class="hint">
-      想用你自己嘅 token（取代預設）才需要填：<br>
-      ① GitHub → Settings → Developer settings → <b>Personal access tokens → Fine-grained tokens</b> → Generate new token。<br>
-      ② Repository access 揀 <code>Only select repositories</code> → 揀 <code>recipes</code> repo；<code>Contents: Read and write</code>。<br>
-      ③ 複製 token 貼上面 → 㩒「連接」。
+      點取得網址（一次過，之後自動記住）：<br>
+      ① 開 <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a> → 新專案 → 貼入我畀你嘅 Apps Script 碼 → 儲存。<br>
+      ② 部署 → 新增部署 → 選「網頁應用程式」→ 執行身分「我」→ 存取權「任何人」→ 部署 → 複製 Web App 網址。<br>
+      ③ 將網址貼上面 → 㩒「連接」。
     </div>
   </div>
   <div id="connStatus" style="margin-top:8px;font-size:.8rem;font-weight:700"></div>
   <div id="connDiag" style="margin-top:6px;font-size:.74rem;color:var(--muted);white-space:pre-wrap"></div>
   <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
     <button type="button" class="btn btn-ghost" id="btnRetryConn">🔁 重試連接</button>
-    <button type="button" class="btn btn-ghost" id="btnDiag">🩺 網絡診斷</button>
+    <button type="button" class="btn btn-ghost" id="btnDiag">🩺 連接診斷</button>
   </div>
 </div>
 
@@ -275,16 +275,14 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ===== 設定：改呢度對應你個 repo ===== */
-const REPO = "Sa-lau/recipes";     // ← owner/repo，要同你上傳嘅 repo 名一樣
+/* ===== 設定：Google Sheets / Apps Script 後台 ===== */
 const DATA_FILE = "recipes.json";
-const RAW_BASE = "https://sa-lau.github.io/recipes";   // 永遠讀雲端，開 local 檔都見到最新
+// Google Apps Script Web App 網址（部署後我會幫你填好；你亦可喺「🌐 雲端網址」自己貼一次，之後自動記住）
+const SHEET_API = "";
+// 舊 GitHub 資料（一次性匯入用，之後可唔理）：公開讀取，唔使 token
+const GH_FALLBACK = "https://sa-lau.github.io/recipes/recipes.json";
 const CACHE_KEY = "myRecipes.cache.v1";
-// 預設連接 token（fine-grained，只授權 recipes 一個 repo）：開網自動連，唔使每次貼。
-// 為避開 GitHub secret 掃描，將字串拆開，runtime 先拼埋。想廢咗佢去 GitHub 㩒 Revoke 就得。
-const _tA = "github_pat_";
-const _tB = "11CJ5DABQ0i6QVEH4hhOFw_GrDmElVL0fp30WlZEiBnL4pmQ1wIyeu60mBXXV6H0E94FWIIB3Y6ECCwlw2";
-const EMBEDDED_TOKEN = _tA + _tB;
+const SHEET_KEY = "myRecipes.sheetUrl.v1";
 
 /* ===== 狀態 ===== */
 let recipes = [];
@@ -294,60 +292,73 @@ let dispMode = "zh";          // zh | en | tw | cn —— 只係顯示用，唔�
 let convCache = {};           // opencc converter cache
 let openccReady = false;
 let selected = new Set();     // 匯出揀選用
-// 開頁直接用嵌入式預設 token 自動連接。唔會讀 localStorage，避免你試過嘅舊壞 token
-// 殘留喺部機而鎖死連接。順便清走舊 key，確保永遠用返嵌入式好 token。
-try{ localStorage.removeItem("myRecipes.gh_token"); }catch(e){}
-let token = EMBEDDED_TOKEN;
+// 雲端網址：優先用你喺頁面填過並存落 localStorage 嗰個，冇就用科学记数法 SHEET_API（部署時填好）
+let sheetApi = (()=>{ try{ return localStorage.getItem(SHEET_KEY) || SHEET_API; }catch(e){ return SHEET_API; } })();
 
 /* ===== 編碼（處理中文 UTF-8） ===== */
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
 function b64decode(b64){ return decodeURIComponent(escape(atob(b64))); }
 
-/* ===== 載入（優先雲端，失敗用 cache；讀取唔使 token） ===== */
+/* ===== 載入：優先 Google 雲端 → 失敗自動由舊 GitHub 匯入一次 → 再唔掂用 cache ===== */
 async function loadData(){
+  // 1) 試 Google 雲端（Apps Script）
   try{
-    const res = await fetch(`${RAW_BASE}/${DATA_FILE}?v=${Date.now()}`, {cache:'no-store'});
-    if(!res.ok) throw new Error('net '+res.status);
-    const arr = await res.json();
-    if(!Array.isArray(arr)) throw new Error('格式錯誤');
-    recipes = arr;
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(e){}
-    setLoadStatus(true, recipes.length, 'cloud');
+    if(sheetApi){
+      const res = await fetch(`${sheetApi}?t=${Date.now()}`, {cache:'no-store'});
+      if(!res.ok) throw new Error('net '+res.status);
+      const j = await res.json();
+      if(!j.ok) throw new Error(j.error || '後台回傳錯誤');
+      const arr = Array.isArray(j.data) ? j.data : [];
+      recipes = arr;
+      try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(e){}
+      setLoadStatus(true, recipes.length, 'cloud');
+      setStatus('ok','✅ 已連接 Google 雲端（可讀寫）');
+      render();
+      return;
+    }
+    throw new Error('未設定雲端網址');
   }catch(e){
-    console.error('loadData error:', e);
-    const diag = document.getElementById("connDiag");
+    console.error('loadData(Sheets) error:', e);
+    setStatus('off','● 未連到 Google 雲端：'+(e&&e.message?e.message:e)+'（睇 cache 正常）');
+    // 2) 自動由舊 GitHub 匯入一次（公開讀取，唔使 token）
+    try{
+      const r2 = await fetch(`${GH_FALLBACK}?v=${Date.now()}`, {cache:'no-store'});
+      if(r2.ok){
+        const arr = await r2.json();
+        if(Array.isArray(arr) && arr.length){
+          recipes = arr;
+          try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(_){}
+          setLoadStatus(true, recipes.length, 'cache');
+          if(sheetApi){ try{ await pushToSheet(); toast('已從舊 GitHub 自動匯入 '+arr.length+' 個食譜去 Google 雲端 ✅'); }catch(_){} }
+          else { toast('已從舊 GitHub 載入 '+arr.length+' 個食譜（請填雲端網址以儲存）'); }
+          render();
+          return;
+        }
+      }
+    }catch(_){}
+    // 3) 最後用 cache
     const c = (()=>{ try{ return localStorage.getItem(CACHE_KEY); }catch(e){ return null; } })();
-    if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache');
-      if(diag){ diag.style.color="var(--muted)"; diag.textContent="（雲端讀取失敗，暫顯上次 cache；錯誤："+(e&&e.message?e.message:e)+"）"; }
-    }catch(e2){ recipes=[]; setLoadStatus(false,0,''); } }
-    else { recipes = []; setLoadStatus(false, 0, '');
-      if(diag){ diag.style.color="var(--accent2)"; diag.textContent="讀取錯誤："+(e&&e.message?e.message:e); } }
+    if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache'); }catch(e2){ recipes=[]; setLoadStatus(false,0,''); } }
+    else { recipes = []; setLoadStatus(false, 0, ''); }
   }
   render();
 }
 
-/* ===== GitHub 寫入（含 retry，應付 409 衝突 / 5xx / 限流） ===== */
-async function pushToGitHub(){
-  if(!token){ toast('請先喺「連接 GitHub」貼入 PAT'); throw new Error('no token'); }
-  const api = `https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
+/* ===== Google 雲端寫入（Apps Script Web App；含 retry） ===== */
+async function pushToSheet(){
+  if(!sheetApi){ toast('請先喺「🌐 雲端網址」填好 Google Apps Script 網址'); throw new Error('no sheet api'); }
   for(let attempt=1; attempt<=3; attempt++){
     try{
-      const head = await fetch(api, {headers:{Authorization:'Bearer '+token}});
-      if(!head.ok) throw new Error('讀取檔案失敗（PAT 無權限或 repo 名錯？）');
-      const meta = await head.json();
-      const content = b64encode(JSON.stringify(recipes,null,2));
-      if(content.length > 900000){ throw new Error('檔案太大（可能相片太多/太大）。建議減少上傳相片，或用圖片網址。'); }
-      const body = JSON.stringify({
-        message: "update recipes via app",
-        content,
-        sha: meta.sha
+      const res = await fetch(sheetApi, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(recipes,null,2)
       });
-      const put = await fetch(api, {method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body});
-      if(put.ok) return;
-      const err = await put.json().catch(()=>({}));
-      if(put.status===409){ continue; }                 // sha 衝突 → 重新攞 sha 再試
-      if(put.status>=500 && attempt<3){ continue; }      // 伺服器錯 → 重試
-      throw new Error(err.message || ('寫入失敗 '+put.status));
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const j = await res.json().catch(()=>({}));
+      if(j.ok===false) throw new Error(j.error || '後台回傳錯誤');
+      setStatus('ok','✅ 已連接 Google 雲端（可讀寫）');
+      return;
     }catch(e){
       if(attempt>=3) throw e;
       await new Promise(r=>setTimeout(r,800));            // 輕微等一下再 retry
@@ -484,46 +495,37 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
 });
 
 /* ===== 連接 GitHub（可重複使用：手動㩒 / 開頁自動連） ===== */
-function showConnOk(){ document.getElementById("connEdit").style.display="none"; document.getElementById("connOk").style.display = token ? "block" : "none"; }
+function showConnOk(){ document.getElementById("connEdit").style.display="none"; document.getElementById("connOk").style.display = sheetApi ? "block" : "none"; }
 function showConnEdit(){ document.getElementById("connOk").style.display="none"; document.getElementById("connEdit").style.display="block"; }
-async function connectWith(v, silent){
+async function connectSheet(url, silent){
+  url=(url||'').trim();
+  if(!url){ setStatus('off','● 未設定雲端網址（只讀模式）'); if(!silent) showConnEdit(); return; }
   try{
-    const api=`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`;
-    const res=await fetch(api,{headers:{Authorization:'Bearer '+v}});
-    if(!res.ok) throw new Error('fail');
-    await res.json();
-    token=v;
+    const res=await fetch(`${url}?t=${Date.now()}`, {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const j=await res.json();
+    if(!j.ok) throw new Error(j.error||'後台錯誤');
+    sheetApi=url;
+    try{ localStorage.setItem(SHEET_KEY, url); }catch(e){}
+    setStatus('ok','✅ 已連接 Google 雲端（可讀寫）');
     showConnOk();
-    setStatus('ok','✅ 可寫入雲端（已連接 GitHub）');
-    if(!silent) toast("已連接 GitHub ✅");
+    if(!silent) toast("已連接 Google 雲端 ✅");
     await loadData();
   }catch(e){
-    if(silent){
-      // 只係「寫入連接」暫時唔到，絕不影響睇食譜；收起綠字，改溫和提示 + 講真因
-      document.getElementById("connOk").style.display="none";
-      let reason='暫時連唔到 GitHub 儲存';
-      if(e instanceof TypeError){ reason='網絡連唔到 api.github.com（可能你個網絡 / 防火牆擋住，或暫時唔通）'; }
-      else if(e && e.message){ reason=e.message; }
-      setStatus('off','● 只讀模式：'+reason+'（睇食譜正常，重整網頁可再試）');
-      const d=document.getElementById("connDiag");
-      if(d){ d.style.color="var(--muted)"; d.textContent="💡 試：熄 WiFi 用數據 / 換部機，再㩒「🔁 重試連接」或「🩺 網絡診斷」。"; }
-    } else {
-      token=EMBEDDED_TOKEN;
-      setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
-      toast("連接失敗，檢查 PAT");
-      showConnEdit();
-    }
+    setStatus('off','● 連接失敗：'+(e&&e.message?e.message:e)+'（請檢查網址是否 Apps Script Web App）');
+    if(!silent){ toast("連接失敗，檢查網址"); showConnEdit(); }
   }
 }
 document.getElementById("btnConnect").addEventListener("click",()=>{
-  const v=document.getElementById("patInput").value.trim();
-  if(!v){toast("請先貼入 PAT");return;}
-  connectWith(v,false);
+  const v=document.getElementById("sheetUrlInput").value.trim();
+  if(!v){toast("請先貼入 Web App 網址");return;}
+  connectSheet(v,false);
 });
 document.getElementById("btnDisconnect").addEventListener("click",()=>{
-  token="";
-  document.getElementById("patInput").value="";
-  setStatus('off','未連接 · 只讀模式');toast("已斷開（重新整理網頁會用返預設連接）");
+  sheetApi="";
+  try{ localStorage.removeItem(SHEET_KEY); }catch(e){}
+  document.getElementById("sheetUrlInput").value="";
+  setStatus('off','未連接 · 只讀模式');toast("已斷開（重新整理網頁會用返之前記住嘅網址）");
   showConnEdit();
 });
 document.getElementById("btnShowToken").addEventListener("click",showConnEdit);
@@ -589,7 +591,7 @@ document.getElementById("f_photoUrl").addEventListener("input",function(){
 });
 document.getElementById("recipeForm").addEventListener("submit",async function(e){
   e.preventDefault();
-  if(!token){alert("請先喺上方「連接 GitHub」貼入 PAT，先可以儲存去雲端。");return;}
+  if(!sheetApi){alert("請先喺「🌐 雲端網址」填好 Google Apps Script 網址，先可以儲存去雲端。");return;}
   const id=document.getElementById("f_id").value;
   const photo=pendingPhoto||document.getElementById("f_photoUrl").value.trim()||"";
   const data={
@@ -609,7 +611,7 @@ document.getElementById("recipeForm").addEventListener("submit",async function(e
   localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));  // 本地先留底，雲端失敗都唔會唔見
   closeModal(); render();
   try{
-    await pushToGitHub();
+    await pushToSheet();
     toast("已儲存到雲端 ✅");
   }catch(err){ toast("雲端儲存失敗："+(err.message||err)+"（本地已暫存，可稍後再試）"); }
 });
@@ -668,9 +670,9 @@ document.getElementById("tbody").addEventListener("click",function(e){
   if(dl){
     const id=dl.getAttribute("data-del");const r=recipes.find(x=>x.id===id);
     if(!confirm("確定刪除「"+(r.dish||"此食譜")+"」？"))return;
-    if(!token){alert("請先連接 GitHub 先可以刪除（要寫入雲端）。");return;}
+    if(!sheetApi){alert("請先連接 Google 雲端先可以刪除（要寫入雲端）。");return;}
     recipes=recipes.filter(x=>x.id!==id);selected.delete(id);render();localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
-    pushToGitHub().then(()=>toast("已刪除 🗑")).catch(err=>toast("刪除失敗："+(err.message||err)));
+    pushToSheet().then(()=>toast("已刪除 🗑")).catch(err=>toast("刪除失敗："+(err.message||err)));
   }
 });
 document.getElementById("tbody").addEventListener("change",function(e){
@@ -715,7 +717,7 @@ document.getElementById("catListBox").addEventListener("click",function(e){
   }
 });
 document.getElementById("btnCatSave").addEventListener("click",async()=>{
-  if(!token){alert("請先連接 GitHub 先可以儲存分類改名。");return;}
+  if(!sheetApi){alert("請先連接 Google 雲端先可以儲存分類改名。");return;}
   const rows=[...document.querySelectorAll("#catListBox .catmgr-row")];
   const map={}; // old -> new
   rows.forEach(r=>{
@@ -735,7 +737,7 @@ document.getElementById("btnCatSave").addEventListener("click",async()=>{
   render();
   if(changed){
     toast("分類已更新，儲存中…");
-    try{ await pushToGitHub(); toast("分類改名已同步雲端 ✅（"+changed+" 個食譜）"); }
+    try{ await pushToSheet(); toast("分類改名已同步雲端 ✅（"+changed+" 個食譜）"); }
     catch(err){ toast("雲端儲存失敗："+(err.message||err)+"（本地已更新）"); }
   }else{ toast("分類無改動"); }
 });
@@ -828,34 +830,37 @@ document.getElementById("btnReload").addEventListener("click",()=>{
   const el=document.getElementById("loadStatus");
   el.innerHTML='<span class="statusdot dot-off"></span>🔄 重新載入中…'; el.style.color="var(--muted)";
   loadData();
-  if(adminMode) connectWith(token,true);
+  if(sheetApi) connectSheet(sheetApi,true);
   toast("已重新從雲端載入 ✅");
 });
 
-/* ===== 🩺 網絡診斷：測兩個端點，顯示真正 HTTP code / 錯誤，方便對症 ===== */
+/* ===== 🩺 連接診斷：測 Google 雲端 + 舊 GitHub 兩個端點，顯示真正 HTTP code / 錯誤 ===== */
 async function runDiag(){
   const out=document.getElementById("connDiag");
   if(!out) return;
   out.style.color="var(--accent2)";
   out.textContent="🔍 診斷中…（約 3 秒）";
   const lines=[];
+  if(!sheetApi){ lines.push("① Google 雲端網址：❌ 未設定（請喺「🌐 雲端網址」填）"); }
+  else{
+    try{
+      const r=await fetch(`${sheetApi}?t=${Date.now()}`,{cache:'no-store'});
+      const j=await r.json().catch(()=>({}));
+      lines.push("① Google 雲端讀取："+(r.ok&&j.ok?"✅ HTTP "+r.status+"（可讀寫）":"❌ HTTP "+r.status+(j.error?(" — "+j.error):"")));
+    }catch(e){ lines.push("① Google 雲端讀取：❌ 失敗（"+e.name+"："+e.message+"）"); }
+  }
   try{
-    const r=await fetch(`${RAW_BASE}/${DATA_FILE}?v=${Date.now()}`,{cache:'no-store'});
-    lines.push("① 雲端讀取 recipes.json：HTTP "+r.status+(r.ok?" ✅ 可讀（睇食譜冇問題）":" ❌ 讀唔到"));
-  }catch(e){ lines.push("① 雲端讀取 recipes.json：❌ 失敗（"+e.name+"："+e.message+"）"); }
-  try{
-    const r=await fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`,{headers:{Authorization:'Bearer '+token}});
-    const j=await r.json().catch(()=>({}));
-    lines.push("② GitHub API 寫入連接："+(r.ok?"✅ HTTP "+r.status+"（可寫入）":"❌ HTTP "+r.status+(j.message?(" — "+j.message):"")));
-  }catch(e){ lines.push("② GitHub API 寫入連接：❌ 失敗（"+e.name+"："+e.message+"）"); }
+    const r2=await fetch(`${GH_FALLBACK}?v=${Date.now()}`,{cache:'no-store'});
+    const arr=await r2.json().catch(()=>null);
+    lines.push("② 舊 GitHub 資料："+(r2.ok&&Array.isArray(arr)?"✅ HTTP "+r2.status+"（"+arr.length+" 個，可作備份匯入）":"❌ HTTP "+r2.status));
+  }catch(e){ lines.push("② 舊 GitHub 資料：❌ 失敗（"+e.name+"："+e.message+"）"); }
   out.style.color="var(--text)";
   out.textContent=lines.join("\n");
 }
 document.getElementById("btnDiag").addEventListener("click",runDiag);
 document.getElementById("btnRetryConn").addEventListener("click",()=>{
-  document.getElementById("connOk").style.display="none";
-  connectWith(token,true);
-  toast("重試連接中…");
+  if(sheetApi){ connectSheet(sheetApi,true); toast("重試連接中…"); }
+  else { showConnEdit(); toast("請先填雲端網址"); }
 });
 
 /* ===== 🌐 顯示模式：中文 / English / 繁體 / 簡體（只改顯示，唔改資料） ===== */
@@ -917,7 +922,7 @@ document.getElementById("btnTranslate").addEventListener("click",async()=>{
 /* 翻譯全部（後台頂部掣）：逐個食譜填滿另一語言，再一次過存雲端 */
 async function translateAll(){
   if(!recipes.length){ toast("無食譜可譯"); return; }
-  if(!token){ alert("請先連接 GitHub 先可以儲存。"); return; }
+  if(!sheetApi){ alert("請先連接 Google 雲端先可以儲存。"); return; }
   if(!confirm("會為全部 "+recipes.length+" 個食譜做中英互譯（自動辨別方向、填滿另一語言），然後一次過存去雲端。確定？")) return;
   let changed=0, fails=0;
   const pairs=[["dish","dishEn"],["materials","materialsEn"],["steps","stepsEn"]];
@@ -938,7 +943,7 @@ async function translateAll(){
   }
   localStorage.setItem(CACHE_KEY,JSON.stringify(recipes));
   render();
-  try{ await pushToGitHub(); toast("已翻譯並儲存 "+changed+" 個食譜 ✅"+(fails?"（"+fails+" 行失敗，已保留原文）":"")); }
+  try{ await pushToSheet(); toast("已翻譯並儲存 "+changed+" 個食譜 ✅"+(fails?"（"+fails+" 行失敗，已保留原文）":"")); }
   catch(err){ toast("雲端儲存失敗："+(err.message||err)+"（本地已更新）"); }
 }
 
@@ -975,11 +980,11 @@ document.getElementById("btnTrad").addEventListener("click",async()=>{
   btn.disabled=false; btn.textContent="🈶 簡 → 繁";
 });
 
-/* 啟動：先載入食譜（唔使 token），同時用預設 token 自動連接雲端（只影響儲存） */
+/* 啟動：開網即用 Google 雲端（網址已 baked 或你之前填過）；失敗都照樣睇食譜 */
 document.getElementById("loadStatus").textContent="🔄 載入食譜中…";
 document.getElementById("connOk").style.display="none";
 loadData();
-connectWith(token, true);
+if(sheetApi) connectSheet(sheetApi, true); else showConnEdit();
 </script>
 </body>
 </html>
