@@ -127,6 +127,7 @@
   </select>
   <button class="btn btn-ghost" id="btnExport" title="匯出：JSON / Excel / PDF，可揀全部或只選中">⬇️ 匯出</button>
   <button class="btn btn-ghost" id="btnReload" title="重新從雲端載入最新食譜">🔄 重新載入</button>
+  <button class="btn btn-ghost" id="btnTransAll" style="border-color:var(--green);color:var(--green)" title="為全部食譜做中英互譯（自動辨別方向、填滿另一語言），一次過存雲端">🌐 翻譯全部</button>
   <button class="btn btn-admin" id="btnAdmin">🔧 管理後台</button>
 </div>
 
@@ -485,17 +486,13 @@ document.getElementById("btnAdmin").addEventListener("click",()=>{
       const c=document.createElement("button");c.id="btnCat";c.className="btn btn-ghost";c.textContent="🏷 分類";
       c.addEventListener("click",openCatModal);tb.appendChild(c);
     }
-    if(!document.getElementById("btnTransAll")){
-      const t=document.createElement("button");t.id="btnTransAll";t.className="btn btn-ghost";t.style.borderColor="var(--green)";t.style.color="var(--green)";
-      t.textContent="🌐 翻譯全部";t.addEventListener("click",translateAll);tb.appendChild(t);
-    }
     render();
   }else{
     adminMode=false;
     document.getElementById("btnAdmin").classList.remove("on");
     document.getElementById("btnAdmin").textContent="🔧 管理後台";
     document.getElementById("settings").classList.remove("show");
-    ["btnAdd","btnCat","btnTransAll"].forEach(id=>{const b=document.getElementById(id);if(b)b.remove();});
+    ["btnAdd","btnCat"].forEach(id=>{const b=document.getElementById(id);if(b)b.remove();});
     render();
   }
 });
@@ -757,6 +754,7 @@ document.getElementById("btnExport").addEventListener("click",()=>{
   document.getElementById("exportOverlay").classList.add("show");
 });
 document.getElementById("btnExpCancel").addEventListener("click",()=>document.getElementById("exportOverlay").classList.remove("show"));
+document.getElementById("btnTransAll").addEventListener("click",translateAll);
 document.getElementById("exportOverlay").addEventListener("click",e=>{if(e.target===document.getElementById("exportOverlay"))document.getElementById("exportOverlay").classList.remove("show");});
 function getExportRows(){
   const scope=document.querySelector('input[name=expScope]:checked').value;
