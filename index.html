@@ -154,6 +154,11 @@
     </div>
   </div>
   <div id="connStatus" style="margin-top:8px;font-size:.8rem;font-weight:700"></div>
+  <div id="connDiag" style="margin-top:6px;font-size:.74rem;color:var(--muted);white-space:pre-wrap"></div>
+  <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+    <button type="button" class="btn btn-ghost" id="btnRetryConn">🔁 重試連接</button>
+    <button type="button" class="btn btn-ghost" id="btnDiag">🩺 網絡診斷</button>
+  </div>
 </div>
 
 <div class="count" id="count"></div>
@@ -309,9 +314,14 @@ async function loadData(){
     try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(e){}
     setLoadStatus(true, recipes.length, 'cloud');
   }catch(e){
+    console.error('loadData error:', e);
+    const diag = document.getElementById("connDiag");
     const c = (()=>{ try{ return localStorage.getItem(CACHE_KEY); }catch(e){ return null; } })();
-    if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache'); }catch(e){ recipes=[]; setLoadStatus(false,0,''); } }
-    else { recipes = []; setLoadStatus(false, 0, ''); }
+    if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache');
+      if(diag){ diag.style.color="var(--muted)"; diag.textContent="（雲端讀取失敗，暫顯上次 cache；錯誤："+(e&&e.message?e.message:e)+"）"; }
+    }catch(e2){ recipes=[]; setLoadStatus(false,0,''); } }
+    else { recipes = []; setLoadStatus(false, 0, '');
+      if(diag){ diag.style.color="var(--accent2)"; diag.textContent="讀取錯誤："+(e&&e.message?e.message:e); } }
   }
   render();
 }
@@ -489,9 +499,14 @@ async function connectWith(v, silent){
     await loadData();
   }catch(e){
     if(silent){
-      // 只係「寫入連接」暫時唔到，絕不影響睇食譜；收起綠字，改溫和提示
+      // 只係「寫入連接」暫時唔到，絕不影響睇食譜；收起綠字，改溫和提示 + 講真因
       document.getElementById("connOk").style.display="none";
-      setStatus('off','● 只讀模式：暫時連唔到 GitHub 儲存（睇食譜正常，重整網頁可再試）');
+      let reason='暫時連唔到 GitHub 儲存';
+      if(e instanceof TypeError){ reason='網絡連唔到 api.github.com（可能你個網絡 / 防火牆擋住，或暫時唔通）'; }
+      else if(e && e.message){ reason=e.message; }
+      setStatus('off','● 只讀模式：'+reason+'（睇食譜正常，重整網頁可再試）');
+      const d=document.getElementById("connDiag");
+      if(d){ d.style.color="var(--muted)"; d.textContent="💡 試：熄 WiFi 用數據 / 換部機，再㩒「🔁 重試連接」或「🩺 網絡診斷」。"; }
     } else {
       token=EMBEDDED_TOKEN;
       setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
@@ -815,6 +830,32 @@ document.getElementById("btnReload").addEventListener("click",()=>{
   loadData();
   if(adminMode) connectWith(token,true);
   toast("已重新從雲端載入 ✅");
+});
+
+/* ===== 🩺 網絡診斷：測兩個端點，顯示真正 HTTP code / 錯誤，方便對症 ===== */
+async function runDiag(){
+  const out=document.getElementById("connDiag");
+  if(!out) return;
+  out.style.color="var(--accent2)";
+  out.textContent="🔍 診斷中…（約 3 秒）";
+  const lines=[];
+  try{
+    const r=await fetch(`${RAW_BASE}/${DATA_FILE}?v=${Date.now()}`,{cache:'no-store'});
+    lines.push("① 雲端讀取 recipes.json：HTTP "+r.status+(r.ok?" ✅ 可讀（睇食譜冇問題）":" ❌ 讀唔到"));
+  }catch(e){ lines.push("① 雲端讀取 recipes.json：❌ 失敗（"+e.name+"："+e.message+"）"); }
+  try{
+    const r=await fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`,{headers:{Authorization:'Bearer '+token}});
+    const j=await r.json().catch(()=>({}));
+    lines.push("② GitHub API 寫入連接："+(r.ok?"✅ HTTP "+r.status+"（可寫入）":"❌ HTTP "+r.status+(j.message?(" — "+j.message):"")));
+  }catch(e){ lines.push("② GitHub API 寫入連接：❌ 失敗（"+e.name+"："+e.message+"）"); }
+  out.style.color="var(--text)";
+  out.textContent=lines.join("\n");
+}
+document.getElementById("btnDiag").addEventListener("click",runDiag);
+document.getElementById("btnRetryConn").addEventListener("click",()=>{
+  document.getElementById("connOk").style.display="none";
+  connectWith(token,true);
+  toast("重試連接中…");
 });
 
 /* ===== 🌐 顯示模式：中文 / English / 繁體 / 簡體（只改顯示，唔改資料） ===== */
