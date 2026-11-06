@@ -126,13 +126,15 @@
     <option value="cn">簡體字</option>
   </select>
   <button class="btn btn-ghost" id="btnExport" title="匯出：JSON / Excel / PDF，可揀全部或只選中">⬇️ 匯出</button>
+  <button class="btn btn-ghost" id="btnReload" title="重新從雲端載入最新食譜">🔄 重新載入</button>
   <button class="btn btn-admin" id="btnAdmin">🔧 管理後台</button>
 </div>
 
 <div class="settings" id="settings">
   <h3>🔐 連接狀態（雲端同步）</h3>
-  <div id="connOk" class="conn-ok">
-    ✅ <b>已自動連接</b> — 開網即用預設 token，可直接加 / 改 / 刪食譜，<b>唔使記、唔使填任何嘢</b>。
+  <div id="loadStatus" style="font-size:.82rem;font-weight:700;margin-bottom:6px;color:var(--muted)">🔄 載入食譜中…</div>
+  <div id="connOk" class="conn-ok" style="display:none">
+    ✅ <b>可寫入雲端</b> — 預載 token 已連接，可直接加 / 改 / 刪食譜，<b>唔使記、唔使填任何嘢</b>。
     <button type="button" class="linkbtn2" id="btnShowToken">🔑 更換 / 用其他 token</button>
   </div>
   <div id="connEdit" class="conn-edit" style="display:none">
@@ -296,19 +298,20 @@ let token = EMBEDDED_TOKEN;
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
 function b64decode(b64){ return decodeURIComponent(escape(atob(b64))); }
 
-/* ===== 載入（優先雲端，失敗用 cache） ===== */
+/* ===== 載入（優先雲端，失敗用 cache；讀取唔使 token） ===== */
 async function loadData(){
   try{
     const res = await fetch(`${RAW_BASE}/${DATA_FILE}?v=${Date.now()}`, {cache:'no-store'});
-    if(!res.ok) throw new Error('net');
+    if(!res.ok) throw new Error('net '+res.status);
     const arr = await res.json();
+    if(!Array.isArray(arr)) throw new Error('格式錯誤');
     recipes = arr;
-    localStorage.setItem(CACHE_KEY, JSON.stringify(arr));
-    setStatus(token? 'ok':'off', token? '已連接（雲端讀取中）':'未連接 · 只讀模式');
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); }catch(e){}
+    setLoadStatus(true, recipes.length, 'cloud');
   }catch(e){
-    const c = localStorage.getItem(CACHE_KEY);
-    if(c){ recipes = JSON.parse(c); setStatus('off','離線 · 顯示上次 cache'); }
-    else { recipes = []; setStatus('err','讀取失敗：確認 repo 已開 Pages 且有 recipes.json'); }
+    const c = (()=>{ try{ return localStorage.getItem(CACHE_KEY); }catch(e){ return null; } })();
+    if(c){ try{ recipes = JSON.parse(c); setLoadStatus(true, recipes.length, 'cache'); }catch(e){ recipes=[]; setLoadStatus(false,0,''); } }
+    else { recipes = []; setLoadStatus(false, 0, ''); }
   }
   render();
 }
@@ -345,6 +348,17 @@ async function pushToGitHub(){
 /* ===== 渲染 ===== */
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);}
 function setStatus(kind,text){const s=document.getElementById("connStatus");const dot=kind==='ok'?'dot-ok':kind==='err'?'dot-err':'dot-off';s.innerHTML=`<span class="statusdot ${dot}"></span>${text}`;}
+function setLoadStatus(ok,n,src){
+  const el=document.getElementById("loadStatus");
+  if(ok){
+    const where = src==='cache' ? '（離線 cache）' : '（來自雲端）';
+    el.innerHTML=`<span class="statusdot dot-ok"></span>已載入 ${n} 個食譜 ${where}`;
+    el.style.color="var(--green)";
+  }else{
+    el.innerHTML=`<span class="statusdot dot-err"></span>⚠️ 讀取失敗：請檢查網絡，或㩒「🔄 重新載入」再試`;
+    el.style.color="var(--accent2)";
+  }
+}
 function esc(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function linesToList(str,ordered){const items=(str||"").split("\n").map(x=>x.trim()).filter(Boolean);if(!items.length)return '<div class="placeholder">（未填寫）</div>';const tag=ordered?"ol":"ul";return "<"+tag+">"+items.map(i=>"<li>"+esc(i)+"</li>").join("")+"</"+tag+">";}
 function photoCell(r){
@@ -469,13 +483,15 @@ async function connectWith(v, silent){
     if(!res.ok) throw new Error('fail');
     await res.json();
     token=v;
-    setStatus('ok','已連接 ✅ 可以雲端同步');
-    if(!silent) toast("已連接 GitHub ✅");
     showConnOk();
+    setStatus('ok','✅ 可寫入雲端（已連接 GitHub）');
+    if(!silent) toast("已連接 GitHub ✅");
     await loadData();
   }catch(e){
     if(silent){
-      setStatus('off','只讀模式（自動連接暫時失敗，可稍後重整網頁）');
+      // 只係「寫入連接」暫時唔到，絕不影響睇食譜；收起綠字，改溫和提示
+      document.getElementById("connOk").style.display="none";
+      setStatus('off','● 只讀模式：暫時連唔到 GitHub 儲存（睇食譜正常，重整網頁可再試）');
     } else {
       token=EMBEDDED_TOKEN;
       setStatus('err','連接失敗：檢查 PAT 權限 / repo 名');
@@ -793,6 +809,13 @@ function exportPDF(rows){
 /* ===== 搜尋 ===== */
 document.getElementById("search").addEventListener("input",render);
 document.getElementById("filterCat").addEventListener("change",render);
+document.getElementById("btnReload").addEventListener("click",()=>{
+  const el=document.getElementById("loadStatus");
+  el.innerHTML='<span class="statusdot dot-off"></span>🔄 重新載入中…'; el.style.color="var(--muted)";
+  loadData();
+  if(adminMode) connectWith(token,true);
+  toast("已重新從雲端載入 ✅");
+});
 
 /* ===== 🌐 顯示模式：中文 / English / 繁體 / 簡體（只改顯示，唔改資料） ===== */
 document.getElementById("dispMode").addEventListener("change",async()=>{
@@ -911,8 +934,9 @@ document.getElementById("btnTrad").addEventListener("click",async()=>{
   btn.disabled=false; btn.textContent="🈶 簡 → 繁";
 });
 
-/* 啟動：永遠用預設 token 自動連接，唔使每次貼 PAT */
-showConnOk();
+/* 啟動：先載入食譜（唔使 token），同時用預設 token 自動連接雲端（只影響儲存） */
+document.getElementById("loadStatus").textContent="🔄 載入食譜中…";
+document.getElementById("connOk").style.display="none";
 loadData();
 connectWith(token, true);
 </script>
